@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Woo DJ Trainer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>woo <span>dj trainer</span></h1>
+    <div class="status">
+      <span id="midi-status" class="pill">MIDI: off</span>
+      <button id="toggle-midi-panel" class="ghost">Controller setup</button>
+    </div>
+  </header>
+
+  <div id="start-overlay" class="overlay">
+    <div class="overlay-card">
+      <h2>Plug in your controller, then start</h2>
+      <p>Works in Chrome or Edge on desktop. A DDJ-FLX4, Numark Party Mix/Platinum FX, or any MIDI controller works &mdash; or just use the keyboard.</p>
+      <button id="start-btn" class="primary">Start</button>
+    </div>
+  </div>
+
+  <main>
+    <section class="waves">
+      <div class="wave-row" data-deck="A">
+        <canvas class="wave-zoom"></canvas>
+        <canvas class="wave-overview" title="Click to seek"></canvas>
+      </div>
+      <div class="wave-row" data-deck="B">
+        <canvas class="wave-zoom"></canvas>
+        <canvas class="wave-overview" title="Click to seek"></canvas>
+      </div>
+    </section>
+
+    <section class="match" aria-live="polite">
+      <div class="match-bpm"><span id="bpm-diff">&ndash;</span><small>BPM diff</small></div>
+      <div class="phase">
+        <div class="phase-track"><div class="phase-center"></div><div id="phase-dot" class="phase-dot"></div></div>
+        <small>Beat phase &mdash; A ahead &rarr; dot right</small>
+      </div>
+      <div id="match-verdict" class="verdict">Load two tracks</div>
+    </section>
+
+    <section class="console">
+      <!-- Deck A -->
+      <div class="deck" data-deck="A">
+        <div class="deck-head">
+          <span class="deck-tag">A</span>
+          <div class="track-info">
+            <div class="track-name">No track</div>
+            <div class="track-meta"><span class="bpm">&ndash;</span> BPM &middot; <span class="pitch-readout">0.00%</span> &middot; <span class="time">0:00</span></div>
+          </div>
+        </div>
+        <div class="load-row">
+          <select class="demo-select"><option value="">Demo track&hellip;</option></select>
+          <label class="file-btn">Load file<input type="file" accept="audio/*" hidden></label>
+        </div>
+        <div class="transport">
+          <button data-action="cue" class="cue">CUE</button>
+          <button data-action="play" class="play">&#9654;&#10074;&#10074;</button>
+          <button data-action="sync" class="sync">SYNC</button>
+          <button data-action="nudgeDown" class="nudge" title="Nudge back">&laquo;</button>
+          <button data-action="nudgeUp" class="nudge" title="Nudge forward">&raquo;</button>
+        </div>
+        <label class="pitch-label">Tempo <input type="range" data-action="pitch" min="0" max="1" step="0.0005" value="0.5"></label>
+      </div>
+
+      <!-- Mixer -->
+      <div class="mixer">
+        <div class="channels">
+          <div class="channel" data-deck="A">
+            <label>Trim<input type="range" data-action="trim" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Hi<input type="range" data-action="eqHigh" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Mid<input type="range" data-action="eqMid" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Low<input type="range" data-action="eqLow" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Filter<input type="range" data-action="filter" min="0" max="1" step="0.005" value="0.5"></label>
+            <div class="fader-wrap">
+              <div class="meter"><div class="meter-fill"></div></div>
+              <input type="range" class="vfader" data-action="volume" min="0" max="1" step="0.005" value="0.8" aria-label="Deck A volume">
+            </div>
+          </div>
+          <div class="channel" data-deck="B">
+            <label>Trim<input type="range" data-action="trim" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Hi<input type="range" data-action="eqHigh" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Mid<input type="range" data-action="eqMid" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Low<input type="range" data-action="eqLow" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Filter<input type="range" data-action="filter" min="0" max="1" step="0.005" value="0.5"></label>
+            <div class="fader-wrap">
+              <div class="meter"><div class="meter-fill"></div></div>
+              <input type="range" class="vfader" data-action="volume" min="0" max="1" step="0.005" value="0.8" aria-label="Deck B volume">
+            </div>
+          </div>
+        </div>
+        <label class="xfade-label">Crossfader<input type="range" id="crossfader" data-global="crossfader" min="0" max="1" step="0.005" value="0.5"></label>
+      </div>
+
+      <!-- Deck B -->
+      <div class="deck" data-deck="B">
+        <div class="deck-head">
+          <span class="deck-tag">B</span>
+          <div class="track-info">
+            <div class="track-name">No track</div>
+            <div class="track-meta"><span class="bpm">&ndash;</span> BPM &middot; <span class="pitch-readout">0.00%</span> &middot; <span class="time">0:00</span></div>
+          </div>
+        </div>
+        <div class="load-row">
+          <select class="demo-select"><option value="">Demo track&hellip;</option></select>
+          <label class="file-btn">Load file<input type="file" accept="audio/*" hidden></label>
+        </div>
+        <div class="transport">
+          <button data-action="cue" class="cue">CUE</button>
+          <button data-action="play" class="play">&#9654;&#10074;&#10074;</button>
+          <button data-action="sync" class="sync">SYNC</button>
+          <button data-action="nudgeDown" class="nudge" title="Nudge back">&laquo;</button>
+          <button data-action="nudgeUp" class="nudge" title="Nudge forward">&raquo;</button>
+        </div>
+        <label class="pitch-label">Tempo <input type="range" data-action="pitch" min="0" max="1" step="0.0005" value="0.5"></label>
+      </div>
+    </section>
+
+    <details class="keys">
+      <summary>Keyboard controls</summary>
+      <p><b>Deck A:</b> <kbd>A</kbd> play &middot; <kbd>S</kbd> cue &middot; <kbd>D</kbd>/<kbd>F</kbd> nudge &middot; <kbd>E</kbd>/<kbd>R</kbd> tempo &minus;/+
+      &nbsp; <b>Deck B:</b> <kbd>J</kbd> play &middot; <kbd>K</kbd> cue &middot; <kbd>L</kbd>/<kbd>;</kbd> nudge &middot; <kbd>I</kbd>/<kbd>O</kbd> tempo &minus;/+
+      &nbsp; <b>Crossfader:</b> <kbd>&larr;</kbd>/<kbd>&rarr;</kbd></p>
+    </details>
+  </main>
+
+  <aside id="midi-panel" class="midi-panel" hidden>
+    <div class="midi-head">
+      <h2>Controller setup</h2>
+      <button id="close-midi-panel" class="ghost" aria-label="Close">&times;</button>
+    </div>
+    <p class="hint">Click <b>Learn</b> next to a control, then move or press it on your controller. Mappings save in this browser.</p>
+    <div id="midi-devices" class="devices">No devices yet.</div>
+    <div class="midi-actions">
+      <button id="export-map" class="ghost">Export mapping</button>
+      <label class="ghost file-btn">Import<input id="import-map" type="file" accept="application/json" hidden></label>
+      <button id="clear-map" class="ghost danger">Clear all</button>
+    </div>
+    <table class="map-table"><tbody id="map-rows"></tbody></table>
+    <h3>Live MIDI monitor</h3>
+    <ol id="midi-log" class="midi-log"></ol>
+  </aside>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
