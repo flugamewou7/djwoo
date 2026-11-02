@@ -241,16 +241,56 @@ function scheduleTrap(I, spec, beat, lead) {
 
 const SCHEDULERS = { prog: scheduleProg, edm: scheduleEdm, house: scheduleHouse, boombap: scheduleBoomBap, trap: scheduleTrap };
 
+// How long each one-shot sound needs to ring out (seconds), from its arguments.
+const SOUND_LENGTH = {
+  kick: () => 0.5, hat: () => 0.25, clap: () => 0.25, snare: () => 0.3, piano: () => 0.6, pluck: () => 0.3,
+  sub808: (a) => a[1] + 0.1, bass: (a) => a[1] + 0.1, supersaw: (a) => a[1] + 0.1,
+  pad: (a) => a[1] + 0.1, keys: (a) => a[1] + 0.1, riser: (a) => a[0] + 0.2,
+};
+
+async function renderSound(name, args, sampleRate) {
+  const len = Math.ceil(SOUND_LENGTH[name](args) * sampleRate);
+  const ctx = new OfflineAudioContext(1, len, sampleRate);
+  const out = ctx.createGain();
+  out.gain.value = 0.6;
+  out.connect(ctx.destination);
+  instruments(ctx, out)[name](0, ...args);
+  return (await ctx.startRendering()).getChannelData(0);
+}
+
+/**
+ * Scheduling thousands of live nodes in one OfflineAudioContext is very slow, so instead each
+ * distinct sound (instrument + arguments) is rendered once and then mixed onto the timeline in JS.
+ */
 export async function renderDemo(spec, sampleRate = 44100) {
   const beat = 60 / spec.bpm;
   const lead = 0.05; // tiny lead-in so beat 1 isn't at sample 0
+  const events = [];
+  const recorder = new Proxy({}, { get: (_, name) => (t, ...args) => events.push([name, t, args]) });
+  SCHEDULERS[spec.style](recorder, spec, beat, lead);
+
+  const keyOf = (name, args) => name + JSON.stringify(args);
+  const pending = new Map();
+  for (const [name, , args] of events) {
+    const key = keyOf(name, args);
+    if (!pending.has(key)) pending.set(key, renderSound(name, args, sampleRate));
+  }
+  const sounds = new Map();
+  for (const [key, p] of pending) sounds.set(key, await p);
+
   const len = Math.ceil((lead + spec.bars * 4 * beat + 1.5) * sampleRate);
-  const ctx = new OfflineAudioContext(2, len, sampleRate);
-  const master = ctx.createGain();
-  master.gain.value = 0.6;
-  const glue = ctx.createDynamicsCompressor();
-  glue.threshold.value = -12; glue.ratio.value = 3;
-  master.connect(glue).connect(ctx.destination);
-  SCHEDULERS[spec.style](instruments(ctx, master), spec, beat, lead);
-  return ctx.startRendering();
+  const mix = new Float32Array(len);
+  for (const [name, t, args] of events) {
+    const snd = sounds.get(keyOf(name, args));
+    const start = Math.round(t * sampleRate);
+    const n = Math.min(snd.length, len - start);
+    for (let i = 0; i < n; i++) mix[start + i] += snd[i];
+  }
+  // gentle soft-clip in place of a bus compressor
+  for (let i = 0; i < len; i++) mix[i] = Math.tanh(mix[i] * 1.2) / 1.2;
+
+  const out = new AudioBuffer({ length: len, sampleRate, numberOfChannels: 2 });
+  out.copyToChannel(mix, 0);
+  out.copyToChannel(mix, 1);
+  return out;
 }

@@ -6,6 +6,9 @@ A browser app for learning to mix with a real DJ controller (Pioneer DDJ-FLX4, N
 
 ## Run it
 
+**Easiest:** download [`dist/woo-dj-trainer.html`](dist/woo-dj-trainer.html) and double-click it. It's one self-contained file, so no server is needed. Rebuild it after changes with `node build.mjs`.
+
+**For development:** 
 It's plain HTML/JS with no build step. Serve the folder over HTTP: ES modules and Web MIDI don't work from `file://`.
 
 ```bash

@@ -1,0 +1,1541 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Woo DJ Trainer</title>
+  <style>
+:root {
+  --bg: #0d0f14;
+  --panel: #161a22;
+  --panel-2: #1d222c;
+  --line: #2a303c;
+  --fg: #e8ebf1;
+  --muted: #8a93a6;
+  --deck-a: #3ec7e0;
+  --deck-b: #f29a3f;
+  --cue: #f2d23f;
+  --good: #4fd18b;
+  --warn: #f2c94c;
+  --bad: #ef5d5d;
+  --wave-played: #3a4150;
+  --grid: rgba(232, 235, 241, 0.22);
+  --radius: 10px;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+button, select, .file-btn {
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+button:hover, select:hover, .file-btn:hover { border-color: var(--muted); }
+button.primary { background: var(--deck-a); color: #04232a; border: none; font-weight: 600; padding: 10px 28px; }
+button.ghost, .ghost { background: transparent; }
+.danger { color: var(--bad); }
+.mono { font-family: var(--mono); font-size: 12px; }
+.dim { color: var(--muted); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-bottom: 1px solid var(--line);
+}
+.topbar h1 { margin: 0; font-size: 18px; letter-spacing: 0.02em; }
+.topbar h1 span { color: var(--muted); font-weight: 400; }
+.status { display: flex; gap: 10px; align-items: center; }
+.pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.pill.good { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.pill.bad { color: var(--bad); }
+
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  display: grid; place-items: center;
+  background: rgba(5, 6, 9, 0.85);
+  padding: 16px;
+}
+.overlay[hidden] { display: none; }
+.overlay-card {
+  max-width: 440px; text-align: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px;
+}
+.overlay-card h2 { margin-top: 0; }
+.overlay-card p { color: var(--muted); }
+
+main { padding: 16px 20px 32px; max-width: 1280px; margin: 0 auto; display: grid; gap: 14px; }
+
+/* waveforms */
+.waves { display: grid; gap: 6px; }
+.wave-row { display: grid; gap: 3px; }
+.wave-zoom { width: 100%; height: 72px; background: var(--panel); border-radius: 6px; display: block; }
+.wave-overview { width: 100%; height: 26px; background: var(--panel); border-radius: 4px; display: block; cursor: pointer; }
+.wave-row[data-deck="A"] .wave-zoom { box-shadow: inset 3px 0 0 var(--deck-a); }
+.wave-row[data-deck="B"] .wave-zoom { box-shadow: inset 3px 0 0 var(--deck-b); }
+
+/* beatmatch meter */
+.match {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 16px;
+}
+.match small { display: block; color: var(--muted); font-size: 11px; }
+.match-bpm span { font-family: var(--mono); font-size: 20px; }
+.phase-track { position: relative; height: 14px; background: var(--panel-2); border-radius: 7px; }
+.phase-center { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: var(--muted); }
+.phase-dot {
+  position: absolute; top: 1px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%;
+  background: var(--warn); left: 50%; transition: left 60ms linear;
+}
+.phase-dot.good { background: var(--good); }
+.verdict { min-width: 220px; text-align: right; font-weight: 600; color: var(--muted); }
+.verdict.good { color: var(--good); }
+.verdict.warn { color: var(--warn); }
+.verdict.bad { color: var(--bad); }
+
+/* console */
+.console { display: grid; grid-template-columns: 1fr minmax(260px, 340px) 1fr; gap: 14px; }
+.deck, .mixer {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
+  display: grid; gap: 12px; align-content: start;
+}
+.deck.drop { border-color: var(--fg); }
+.deck-head { display: flex; gap: 12px; align-items: center; }
+.deck-tag {
+  width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; font-weight: 700;
+  color: #0d0f14;
+}
+.deck[data-deck="A"] .deck-tag { background: var(--deck-a); }
+.deck[data-deck="B"] .deck-tag { background: var(--deck-b); }
+.track-info { min-width: 0; }
+.track-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-meta { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.track-meta .bpm { color: var(--fg); }
+.load-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.load-row select { flex: 1; min-width: 0; }
+
+.transport { display: flex; gap: 8px; flex-wrap: wrap; }
+.transport button { min-width: 52px; padding: 10px 12px; font-weight: 600; }
+.transport .cue { color: var(--cue); }
+.transport .play.on { background: var(--good); color: #062014; border-color: var(--good); }
+.transport .sync { font-size: 12px; }
+.transport .nudge { min-width: 40px; }
+
+label { display: grid; gap: 4px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+input[type=range] { width: 100%; accent-color: var(--fg); }
+.deck[data-deck="A"] input[type=range] { accent-color: var(--deck-a); }
+.deck[data-deck="B"] input[type=range] { accent-color: var(--deck-b); }
+
+.channels { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.channel { display: grid; gap: 8px; }
+.channel[data-deck="A"] input { accent-color: var(--deck-a); }
+.channel[data-deck="B"] input { accent-color: var(--deck-b); }
+.fader-wrap { display: flex; gap: 8px; align-items: stretch; height: 130px; justify-content: center; }
+.vfader { writing-mode: vertical-lr; direction: rtl; width: 28px; height: 100%; }
+.meter { width: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; display: flex; align-items: flex-end; }
+.meter-fill {
+  width: 100%; height: 100%; transform-origin: bottom; transform: scaleY(0);
+  background: linear-gradient(to top, var(--good) 0 70%, var(--warn) 70% 90%, var(--bad) 90%);
+}
+.xfade-label { margin-top: 4px; }
+
+.keys { color: var(--muted); font-size: 13px; }
+.keys summary { cursor: pointer; }
+kbd {
+  font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px solid var(--line);
+  border-bottom-width: 2px; border-radius: 4px; color: var(--fg);
+}
+
+/* MIDI panel */
+.midi-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%); z-index: 10;
+  background: var(--panel); border-left: 1px solid var(--line); padding: 16px; overflow-y: auto;
+  box-shadow: -12px 0 40px rgba(0, 0, 0, 0.4);
+}
+.midi-panel[hidden] { display: none; }
+.midi-head { display: flex; justify-content: space-between; align-items: center; }
+.midi-head h2 { margin: 0; font-size: 16px; }
+.midi-panel h3 { font-size: 13px; margin: 18px 0 6px; color: var(--muted); }
+.hint { color: var(--muted); font-size: 13px; }
+.devices { font-size: 13px; padding: 8px 10px; background: var(--panel-2); border-radius: 8px; }
+.midi-actions { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+.file-btn { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--fg); display: inline-block; }
+.midi-actions .file-btn { display: inline-block; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--fg); }
+.map-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.map-table td { padding: 4px 4px; border-bottom: 1px solid var(--line); }
+.map-table button { padding: 3px 8px; font-size: 12px; }
+.map-table .learn.active { border-color: var(--cue); color: var(--cue); }
+.midi-log { list-style: none; margin: 0; padding: 0; font-size: 12px; max-height: 240px; overflow-y: auto; }
+.midi-log li { padding: 2px 0; border-bottom: 1px solid var(--line); }
+
+@media (max-width: 900px) {
+  main { padding: 12px 16px 24px; }
+  .console { grid-template-columns: 1fr; }
+  .match { grid-template-columns: 1fr; gap: 8px; }
+  .verdict { text-align: left; }
+}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <h1>woo <span>dj trainer</span></h1>
+    <div class="status">
+      <span id="midi-status" class="pill">MIDI: off</span>
+      <button id="toggle-midi-panel" class="ghost">Controller setup</button>
+    </div>
+  </header>
+
+  <div id="start-overlay" class="overlay">
+    <div class="overlay-card">
+      <h2>Plug in your controller, then start</h2>
+      <p>Works in Chrome or Edge on desktop. A DDJ-FLX4, Numark Party Mix/Platinum FX, or any MIDI controller works &mdash; or just use the keyboard.</p>
+      <button id="start-btn" class="primary">Start</button>
+    </div>
+  </div>
+
+  <main>
+    <section class="waves">
+      <div class="wave-row" data-deck="A">
+        <canvas class="wave-zoom"></canvas>
+        <canvas class="wave-overview" title="Click to seek"></canvas>
+      </div>
+      <div class="wave-row" data-deck="B">
+        <canvas class="wave-zoom"></canvas>
+        <canvas class="wave-overview" title="Click to seek"></canvas>
+      </div>
+    </section>
+
+    <section class="match" aria-live="polite">
+      <div class="match-bpm"><span id="bpm-diff">&ndash;</span><small>BPM diff</small></div>
+      <div class="phase">
+        <div class="phase-track"><div class="phase-center"></div><div id="phase-dot" class="phase-dot"></div></div>
+        <small>Beat phase &mdash; A ahead &rarr; dot right</small>
+      </div>
+      <div id="match-verdict" class="verdict">Load two tracks</div>
+    </section>
+
+    <section class="console">
+      <!-- Deck A -->
+      <div class="deck" data-deck="A">
+        <div class="deck-head">
+          <span class="deck-tag">A</span>
+          <div class="track-info">
+            <div class="track-name">No track</div>
+            <div class="track-meta"><span class="bpm">&ndash;</span> BPM &middot; <span class="pitch-readout">0.00%</span> &middot; <span class="time">0:00</span></div>
+          </div>
+        </div>
+        <div class="load-row">
+          <select class="demo-select"><option value="">Demo track&hellip;</option></select>
+          <label class="file-btn">Load file<input type="file" accept="audio/*" hidden></label>
+        </div>
+        <div class="transport">
+          <button data-action="cue" class="cue">CUE</button>
+          <button data-action="play" class="play">&#9654;&#10074;&#10074;</button>
+          <button data-action="sync" class="sync">SYNC</button>
+          <button data-action="nudgeDown" class="nudge" title="Nudge back">&laquo;</button>
+          <button data-action="nudgeUp" class="nudge" title="Nudge forward">&raquo;</button>
+        </div>
+        <label class="pitch-label">Tempo <input type="range" data-action="pitch" min="0" max="1" step="0.0005" value="0.5"></label>
+      </div>
+
+      <!-- Mixer -->
+      <div class="mixer">
+        <div class="channels">
+          <div class="channel" data-deck="A">
+            <label>Trim<input type="range" data-action="trim" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Hi<input type="range" data-action="eqHigh" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Mid<input type="range" data-action="eqMid" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Low<input type="range" data-action="eqLow" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Filter<input type="range" data-action="filter" min="0" max="1" step="0.005" value="0.5"></label>
+            <div class="fader-wrap">
+              <div class="meter"><div class="meter-fill"></div></div>
+              <input type="range" class="vfader" data-action="volume" min="0" max="1" step="0.005" value="0.8" aria-label="Deck A volume">
+            </div>
+          </div>
+          <div class="channel" data-deck="B">
+            <label>Trim<input type="range" data-action="trim" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Hi<input type="range" data-action="eqHigh" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Mid<input type="range" data-action="eqMid" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Low<input type="range" data-action="eqLow" min="0" max="1" step="0.005" value="0.5"></label>
+            <label>Filter<input type="range" data-action="filter" min="0" max="1" step="0.005" value="0.5"></label>
+            <div class="fader-wrap">
+              <div class="meter"><div class="meter-fill"></div></div>
+              <input type="range" class="vfader" data-action="volume" min="0" max="1" step="0.005" value="0.8" aria-label="Deck B volume">
+            </div>
+          </div>
+        </div>
+        <label class="xfade-label">Crossfader<input type="range" id="crossfader" data-global="crossfader" min="0" max="1" step="0.005" value="0.5"></label>
+      </div>
+
+      <!-- Deck B -->
+      <div class="deck" data-deck="B">
+        <div class="deck-head">
+          <span class="deck-tag">B</span>
+          <div class="track-info">
+            <div class="track-name">No track</div>
+            <div class="track-meta"><span class="bpm">&ndash;</span> BPM &middot; <span class="pitch-readout">0.00%</span> &middot; <span class="time">0:00</span></div>
+          </div>
+        </div>
+        <div class="load-row">
+          <select class="demo-select"><option value="">Demo track&hellip;</option></select>
+          <label class="file-btn">Load file<input type="file" accept="audio/*" hidden></label>
+        </div>
+        <div class="transport">
+          <button data-action="cue" class="cue">CUE</button>
+          <button data-action="play" class="play">&#9654;&#10074;&#10074;</button>
+          <button data-action="sync" class="sync">SYNC</button>
+          <button data-action="nudgeDown" class="nudge" title="Nudge back">&laquo;</button>
+          <button data-action="nudgeUp" class="nudge" title="Nudge forward">&raquo;</button>
+        </div>
+        <label class="pitch-label">Tempo <input type="range" data-action="pitch" min="0" max="1" step="0.0005" value="0.5"></label>
+      </div>
+    </section>
+
+    <details class="keys">
+      <summary>Keyboard controls</summary>
+      <p><b>Deck A:</b> <kbd>A</kbd> play &middot; <kbd>S</kbd> cue &middot; <kbd>D</kbd>/<kbd>F</kbd> nudge &middot; <kbd>E</kbd>/<kbd>R</kbd> tempo &minus;/+
+      &nbsp; <b>Deck B:</b> <kbd>J</kbd> play &middot; <kbd>K</kbd> cue &middot; <kbd>L</kbd>/<kbd>;</kbd> nudge &middot; <kbd>I</kbd>/<kbd>O</kbd> tempo &minus;/+
+      &nbsp; <b>Crossfader:</b> <kbd>&larr;</kbd>/<kbd>&rarr;</kbd></p>
+    </details>
+  </main>
+
+  <aside id="midi-panel" class="midi-panel" hidden>
+    <div class="midi-head">
+      <h2>Controller setup</h2>
+      <button id="close-midi-panel" class="ghost" aria-label="Close">&times;</button>
+    </div>
+    <p class="hint">Click <b>Learn</b> next to a control, then move or press it on your controller. Mappings save in this browser.</p>
+    <div id="midi-devices" class="devices">No devices yet.</div>
+    <div class="midi-actions">
+      <button id="export-map" class="ghost">Export mapping</button>
+      <label class="ghost file-btn">Import<input id="import-map" type="file" accept="application/json" hidden></label>
+      <button id="clear-map" class="ghost danger">Clear all</button>
+    </div>
+    <table class="map-table"><tbody id="map-rows"></tbody></table>
+    <h3>Live MIDI monitor</h3>
+    <ol id="midi-log" class="midi-log"></ol>
+  </aside>
+
+  <script>
+(() => {
+// ---- src/deck.js
+const { PITCH_RANGE, Deck } = (() => {
+// One playback deck: source -> trim -> 3-band EQ -> filter -> channel fader -> crossfader gain.
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const PITCH_RANGE = 0.08; // ±8%, like most controllers' default
+
+class Deck {
+  constructor(ctx, output, id) {
+    this.ctx = ctx;
+    this.id = id;
+
+    this.trim = ctx.createGain();
+    this.low = ctx.createBiquadFilter();
+    this.low.type = 'lowshelf';
+    this.low.frequency.value = 220;
+    this.mid = ctx.createBiquadFilter();
+    this.mid.type = 'peaking';
+    this.mid.frequency.value = 1000;
+    this.mid.Q.value = 0.8;
+    this.high = ctx.createBiquadFilter();
+    this.high.type = 'highshelf';
+    this.high.frequency.value = 3500;
+    this.hp = ctx.createBiquadFilter();
+    this.hp.type = 'highpass';
+    this.hp.frequency.value = 10;
+    this.hp.Q.value = 0.9;
+    this.lp = ctx.createBiquadFilter();
+    this.lp.type = 'lowpass';
+    this.lp.frequency.value = 22000;
+    this.lp.Q.value = 0.9;
+    this.fader = ctx.createGain();
+    this.xfade = ctx.createGain();
+    this.analyser = ctx.createAnalyser();
+    this.analyser.fftSize = 1024;
+    this._meterBuf = new Float32Array(this.analyser.fftSize);
+
+    this.trim.connect(this.low).connect(this.mid).connect(this.high)
+      .connect(this.hp).connect(this.lp).connect(this.fader).connect(this.xfade).connect(output);
+    this.fader.connect(this.analyser);
+
+    this.buffer = null;
+    this.name = '';
+    this.source = null;
+    this.playing = false;
+    this.offset = 0;      // track position (s) at startedAt
+    this.startedAt = 0;   // ctx time playback (re)started
+    this.pitch = 0;       // -PITCH_RANGE..PITCH_RANGE
+    this.bend = 0;        // temporary jog / nudge bend
+    this.cuePoint = 0;
+    this.bpm = null;
+    this.firstBeat = 0;
+    this._bendTimer = null;
+
+    this.setVolume(0.8);
+  }
+
+  get duration() { return this.buffer ? this.buffer.duration : 0; }
+  get rate() { return (1 + this.pitch) * (1 + this.bend); }
+  get effectiveBpm() { return this.bpm ? this.bpm * (1 + this.pitch) : null; }
+
+  get position() {
+    if (!this.playing) return this.offset;
+    return Math.min(this.duration, this.offset + (this.ctx.currentTime - this.startedAt) * this.rate);
+  }
+
+  /** Fraction (0..1) of the way through the current beat. */
+  get beatPhase() {
+    if (!this.bpm) return null;
+    const beatLen = 60 / this.bpm;
+    const b = (this.position - this.firstBeat) / beatLen;
+    return b - Math.floor(b);
+  }
+
+  load(buffer, name) {
+    this.pause();
+    this.buffer = buffer;
+    this.name = name;
+    this.offset = 0;
+    this.cuePoint = 0;
+    this.bpm = null;
+    this.firstBeat = 0;
+  }
+
+  play() {
+    if (!this.buffer || this.playing) return;
+    if (this.offset >= this.duration - 0.01) this.offset = 0;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.buffer;
+    src.playbackRate.value = this.rate;
+    src.connect(this.trim);
+    src.start(0, this.offset);
+    src.onended = () => {
+      if (this.source === src && this.playing) {
+        this.playing = false;
+        this.offset = this.duration;
+        this.source = null;
+      }
+    };
+    this.source = src;
+    this.startedAt = this.ctx.currentTime;
+    this.playing = true;
+  }
+
+  pause() {
+    if (!this.playing) return;
+    this.offset = this.position;
+    this.playing = false;
+    const src = this.source;
+    this.source = null;
+    try { src.stop(); } catch { /* already stopped */ }
+  }
+
+  togglePlay() { this.playing ? this.pause() : this.play(); }
+
+  seek(t) {
+    const wasPlaying = this.playing;
+    this.pause();
+    this.offset = clamp(t, 0, this.duration);
+    if (wasPlaying) this.play();
+  }
+
+  /** CDJ-style cue: while playing, jump back to cue and stop; while stopped, set cue here. */
+  cue() {
+    if (!this.buffer) return;
+    if (this.playing) {
+      this.pause();
+      this.offset = this.cuePoint;
+    } else {
+      this.cuePoint = this.offset;
+    }
+  }
+
+  _rebase() {
+    if (this.playing) {
+      this.offset = this.position;
+      this.startedAt = this.ctx.currentTime;
+    }
+  }
+
+  _applyRate() {
+    if (this.source) this.source.playbackRate.setValueAtTime(this.rate, this.ctx.currentTime);
+  }
+
+  setPitch(p) {
+    this._rebase();
+    this.pitch = clamp(p, -PITCH_RANGE, PITCH_RANGE);
+    this._applyRate();
+  }
+
+  setBend(b) {
+    this._rebase();
+    this.bend = clamp(b, -0.3, 0.3);
+    this._applyRate();
+  }
+
+  /** Temporary speed-up / slow-down, auto-released. */
+  pitchBend(amount, ms = 120) {
+    this.setBend(amount);
+    clearTimeout(this._bendTimer);
+    this._bendTimer = setTimeout(() => this.setBend(0), ms);
+  }
+
+  /** Jog wheel: bend while playing, scrub while stopped. delta = ticks (+/-). */
+  jog(delta) {
+    if (!this.buffer) return;
+    if (this.playing) this.pitchBend(delta * 0.01, 100);
+    else this.seek(this.position + delta * 0.01);
+  }
+
+  // ---- mixer parameters, all take 0..1 with 0.5 as neutral where applicable ----
+  _smooth(param, value) { param.setTargetAtTime(value, this.ctx.currentTime, 0.015); }
+
+  setVolume(v) { this._smooth(this.fader.gain, v * v); }
+  setTrim(v) { this._smooth(this.trim.gain, Math.pow(10, ((v - 0.5) * 24) / 20)); } // ±12 dB
+
+  setEq(band, v) {
+    // 0 → -26 dB (near kill), 0.5 → 0 dB, 1 → +6 dB
+    const db = v < 0.5 ? -26 * (1 - v / 0.5) : 6 * ((v - 0.5) / 0.5);
+    this._smooth(this[band].gain, db);
+  }
+
+  setFilter(v) {
+    const lpF = v < 0.5 ? 200 * Math.pow(110, v / 0.5) : 22000;
+    const hpF = v > 0.5 ? 10 * Math.pow(800, (v - 0.5) / 0.5) : 10;
+    this._smooth(this.lp.frequency, lpF);
+    this._smooth(this.hp.frequency, hpF);
+  }
+
+  /** RMS level of the post-fader signal, 0..~1. */
+  level() {
+    this.analyser.getFloatTimeDomainData(this._meterBuf);
+    let sum = 0;
+    for (const s of this._meterBuf) sum += s * s;
+    return Math.sqrt(sum / this._meterBuf.length);
+  }
+}
+
+return { PITCH_RANGE, Deck };
+})();
+
+// ---- src/bpm.js
+const { analyzeTempo } = (() => {
+// Offline tempo + beat-grid estimation.
+// 1. Low-pass the track (kick/bass carry the beat), 2. build an onset-strength envelope,
+// 3. score candidate tempos with a comb over the envelope, 4. find the beat phase.
+
+const TARGET_FPS = 200; // envelope frames per second (~5 ms resolution)
+
+/** Renders two mono bands: lows (kick/808/bass) and highs (hats/snare transients). */
+async function splitBands(buffer, startSec, durSec) {
+  const sr = buffer.sampleRate;
+  const len = Math.floor(durSec * sr);
+  const off = new OfflineAudioContext(2, len, sr);
+  const src = off.createBufferSource();
+  src.buffer = buffer;
+  const lp = off.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 150;
+  const hp = off.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 4000;
+  const merge = off.createChannelMerger(2);
+  src.connect(lp).connect(merge, 0, 0);
+  src.connect(hp).connect(merge, 0, 1);
+  merge.connect(off.destination);
+  src.start(0, startSec, durSec);
+  const rendered = await off.startRendering();
+  return [rendered.getChannelData(0), rendered.getChannelData(1)];
+}
+
+function normalize(a) {
+  let m = 0;
+  for (const v of a) if (v > m) m = v;
+  if (m > 0) for (let i = 0; i < a.length; i++) a[i] /= m;
+  return a;
+}
+
+function onsetEnvelope(samples, hop) {
+  const n = Math.floor(samples.length / hop);
+  const energy = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let e = 0;
+    const base = i * hop;
+    for (let j = 0; j < hop; j++) { const s = samples[base + j]; e += s * s; }
+    energy[i] = Math.sqrt(e / hop);
+  }
+  const onset = new Float32Array(n);
+  for (let i = 1; i < n; i++) onset[i] = Math.max(0, energy[i] - energy[i - 1]);
+  return onset;
+}
+
+function sampleAt(arr, x) {
+  const i = Math.floor(x);
+  if (i + 1 >= arr.length) return 0;
+  const f = x - i;
+  return arr[i] * (1 - f) + arr[i + 1] * f;
+}
+
+function combScore(onset, lag) {
+  // correlate the envelope with itself at 1, 2 and 4 beats
+  let s = 0;
+  for (const mult of [1, 2, 4]) {
+    const L = lag * mult;
+    let acc = 0;
+    for (let i = 0; i + L + 1 < onset.length; i += 2) acc += onset[i] * sampleAt(onset, i + L);
+    s += acc / mult;
+  }
+  return s;
+}
+
+async function analyzeTempo(buffer) {
+  // analyse up to 60 s from the middle-ish of the track (skips quiet intros)
+  const dur = Math.min(60, buffer.duration);
+  const start = Math.max(0, Math.min(buffer.duration - dur, buffer.duration * 0.25));
+  const hop = Math.round(buffer.sampleRate / TARGET_FPS);
+  const FPS = buffer.sampleRate / hop; // exact frame rate, so the BPM isn't skewed by rounding
+  const [lows, highs] = await splitBands(buffer, start, dur);
+  const lowOnset = normalize(onsetEnvelope(lows, hop));
+  const highOnset = normalize(onsetEnvelope(highs, hop));
+  // tempo uses both bands (hats carry the pulse in half-time rap/trap); phase uses the kick
+  const onset = lowOnset.map((v, i) => v + 0.6 * highOnset[i]);
+
+  let best = { bpm: 120, score: -1 };
+  for (let bpm = 80; bpm < 160; bpm += 0.25) {
+    const score = combScore(onset, (60 * FPS) / bpm);
+    if (score > best.score) best = { bpm, score };
+  }
+  // refine
+  for (let bpm = best.bpm - 0.3; bpm <= best.bpm + 0.3; bpm += 0.02) {
+    const score = combScore(onset, (60 * FPS) / bpm);
+    if (score > best.score) best = { bpm, score };
+  }
+  const bpm = Math.round(best.bpm * 100) / 100;
+
+  // beat phase: which offset within one beat lines up with the most onset energy
+  const beatFrames = (60 * FPS) / bpm;
+  let bestPhase = 0, bestPhaseScore = -1;
+  for (let p = 0; p < beatFrames; p += 0.5) {
+    let s = 0;
+    for (let x = p; x < lowOnset.length; x += beatFrames) s += sampleAt(lowOnset, x);
+    if (s > bestPhaseScore) { bestPhaseScore = s; bestPhase = p; }
+  }
+  const beatLen = 60 / bpm;
+  let firstBeat = (start + bestPhase / FPS) % beatLen;
+  if (firstBeat < 0) firstBeat += beatLen;
+  return { bpm, firstBeat };
+}
+
+return { analyzeTempo };
+})();
+
+// ---- src/demo-tracks.js
+const { DEMO_TRACKS, renderDemo } = (() => {
+// Synthesised practice tracks in the genres the trainer focuses on: progressive house, EDM, house, rap.
+// Rendered in the browser, so the app works with no audio files (and no licensing issues).
+// Every track is built from 8-bar phrases (intro / main / breakdown / main / outro) so lessons
+// can teach phrase-aligned mixing.
+
+const DEMO_TRACKS = [
+  { id: 'prog128', genre: 'Progressive House', name: 'Demo: Midnight Drive', bpm: 128, root: 45, bars: 40, style: 'prog' },
+  { id: 'prog124', genre: 'Progressive House', name: 'Demo: Slow Horizon', bpm: 124, root: 50, bars: 40, style: 'prog' },
+  { id: 'edm128', genre: 'EDM', name: 'Demo: Main Stage', bpm: 128, root: 41, bars: 40, style: 'edm' },
+  { id: 'edm126', genre: 'EDM', name: 'Demo: Festival Lights', bpm: 126, root: 43, bars: 40, style: 'edm' },
+  { id: 'house124', genre: 'House', name: 'Demo: Warehouse Piano', bpm: 124, root: 48, bars: 40, style: 'house' },
+  { id: 'house122', genre: 'House', name: 'Demo: Deep Groove', bpm: 122, root: 45, bars: 40, style: 'house' },
+  { id: 'rap90', genre: 'Rap', name: 'Demo: Boom Bap Cypher', bpm: 90, root: 40, bars: 32, style: 'boombap' },
+  { id: 'rap140', genre: 'Rap', name: 'Demo: Trap Run (140)', bpm: 140, root: 42, bars: 32, style: 'trap' },
+];
+
+const midiHz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+
+function noiseBuffer(ctx, seconds) {
+  const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * seconds), ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  let seed = 1234567;
+  for (let i = 0; i < d.length; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    d[i] = (seed / 0x7fffffff) * 2 - 1;
+  }
+  return buf;
+}
+
+function instruments(ctx, master) {
+  const noise = noiseBuffer(ctx, 1);
+  const env = (g, t, peak, attack, decay) => {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+  };
+  const noiseHit = (t, { type, freq, q = 0.8, peak, decay, offset = 0 }) => {
+    const s = ctx.createBufferSource();
+    s.buffer = noise;
+    const f = ctx.createBiquadFilter();
+    f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain();
+    env(g, t, peak, 0.002, decay);
+    s.connect(f).connect(g).connect(master);
+    s.start(t, offset, decay + 0.05);
+  };
+  const tone = (t, { type, note, peak, attack = 0.005, decay, cutoff = 20000, q = 0.7, detune = 0 }) => {
+    const o = ctx.createOscillator();
+    o.type = type; o.frequency.value = midiHz(note); o.detune.value = detune;
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = cutoff; f.Q.value = q;
+    const g = ctx.createGain();
+    env(g, t, peak, attack, decay);
+    o.connect(f).connect(g).connect(master);
+    o.start(t); o.stop(t + attack + decay + 0.05);
+  };
+
+  return {
+    kick(t, { peak = 1, from = 150, to = 45, decay = 0.35 } = {}) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.frequency.setValueAtTime(from, t);
+      o.frequency.exponentialRampToValueAtTime(to, t + 0.12);
+      g.gain.setValueAtTime(peak, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+      o.connect(g).connect(master);
+      o.start(t); o.stop(t + decay + 0.05);
+    },
+    hat: (t, open = false, peak = 0.15) =>
+      noiseHit(t, { type: 'highpass', freq: 7500, peak: open ? peak * 1.4 : peak, decay: open ? 0.18 : 0.04, offset: Math.random() * 0.5 }),
+    clap: (t, peak = 0.35) => noiseHit(t, { type: 'bandpass', freq: 1500, peak, decay: 0.16, offset: 0.3 }),
+    snare(t, peak = 0.4) {
+      noiseHit(t, { type: 'bandpass', freq: 2200, q: 0.6, peak, decay: 0.2, offset: 0.1 });
+      tone(t, { type: 'triangle', note: 55, peak: peak * 0.6, decay: 0.09 });
+    },
+    sub808(t, note, dur) {
+      tone(t, { type: 'sine', note, peak: 0.6, attack: 0.004, decay: dur });
+      tone(t, { type: 'triangle', note: note + 12, peak: 0.08, attack: 0.004, decay: dur * 0.5 });
+    },
+    bass: (t, note, dur, cutoff = 420, peak = 0.28) =>
+      tone(t, { type: 'sawtooth', note, peak, attack: 0.008, decay: dur, cutoff, q: 4 }),
+    pluck: (t, note, peak = 0.07, cutoff = 2600) =>
+      tone(t, { type: 'sawtooth', note, peak, attack: 0.003, decay: 0.18, cutoff, q: 2 }),
+    supersaw(t, notes, dur, peak = 0.035) {
+      for (const n of notes) for (const d of [-14, 0, 14]) tone(t, { type: 'sawtooth', note: n, peak, attack: 0.01, decay: dur, cutoff: 5000, detune: d });
+    },
+    pad(t, notes, dur, peak = 0.03) {
+      for (const n of notes) for (const d of [-8, 8]) tone(t, { type: 'sawtooth', note: n, peak, attack: dur * 0.4, decay: dur * 0.6, cutoff: 1400, detune: d });
+    },
+    piano(t, notes, peak = 0.09) {
+      for (const n of notes) {
+        tone(t, { type: 'triangle', note: n, peak, attack: 0.003, decay: 0.45 });
+        tone(t, { type: 'square', note: n, peak: peak * 0.25, attack: 0.003, decay: 0.12, cutoff: 3000 });
+      }
+    },
+    keys: (t, notes, dur, peak = 0.05) => {
+      for (const n of notes) tone(t, { type: 'triangle', note: n, peak, attack: 0.01, decay: dur, cutoff: 2000 });
+    },
+    riser(t, dur) {
+      const s = ctx.createBufferSource();
+      s.buffer = noise; s.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.Q.value = 1.5;
+      f.frequency.setValueAtTime(400, t);
+      f.frequency.exponentialRampToValueAtTime(9000, t + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.18, t + dur);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.05);
+      s.connect(f).connect(g).connect(master);
+      s.start(t); s.stop(t + dur + 0.1);
+    },
+  };
+}
+
+// minor-key progressions as semitone offsets from the root, one chord per bar
+const PROG_CHORDS = [[0, 3, 7], [-4, 0, 3], [-2, 2, 5], [-5, -2, 2]]; // i – VI – VII – v
+const POP_CHORDS = [[0, 3, 7], [-4, 0, 3], [3, 7, 10], [-2, 2, 5]];   // i – VI – III – VII
+
+/** Section for a given bar in a 40-bar dance arrangement. */
+function danceSection(bar) {
+  if (bar < 8) return 'intro';
+  if (bar < 16) return 'main';
+  if (bar < 24) return 'break';
+  if (bar < 32) return 'drop';
+  return 'outro';
+}
+
+function scheduleProg(I, spec, beat, lead) {
+  const r = spec.root;
+  for (let b = 0; b < spec.bars * 4; b++) {
+    const t = lead + b * beat, bar = Math.floor(b / 4), inBar = b % 4;
+    const sec = danceSection(bar);
+    const chord = PROG_CHORDS[Math.floor(bar / 2) % 4];
+    if (sec !== 'break') I.kick(t);
+    if (sec !== 'break') I.hat(t + beat / 2, sec === 'drop');
+    if (sec === 'main' || sec === 'drop') { if (inBar % 2 === 1) I.clap(t, 0.25); I.hat(t + beat * 0.75, false, 0.07); }
+    // rolling 16th bassline (the prog signature), muted on the downbeat to leave room for the kick
+    if (sec !== 'intro' || bar >= 4) {
+      for (let s = 1; s < 4; s++) I.bass(t + (s * beat) / 4, r - 12 + chord[0], beat * 0.2, sec === 'drop' ? 700 : 450, 0.2);
+    }
+    if (inBar === 0 && bar % 2 === 0 && sec !== 'intro') I.pad(t, chord.map((n) => r + 12 + n), beat * 8);
+    // arpeggiated pluck
+    if (sec === 'drop' || sec === 'break') {
+      const arp = [0, 1, 2, 1];
+      for (let s = 0; s < 4; s++) I.pluck(t + (s * beat) / 4, r + 24 + chord[arp[s]], 0.05, sec === 'break' ? 1400 : 3200);
+    }
+    if (bar === 20 && inBar === 0) I.riser(t, beat * 16);
+  }
+}
+
+function scheduleEdm(I, spec, beat, lead) {
+  const r = spec.root;
+  for (let b = 0; b < spec.bars * 4; b++) {
+    const t = lead + b * beat, bar = Math.floor(b / 4), inBar = b % 4;
+    const sec = danceSection(bar);
+    const chord = POP_CHORDS[bar % 4];
+    if (sec !== 'break') I.kick(t, { peak: 1.1, from: 180, to: 48, decay: 0.42 });
+    if (sec !== 'break') I.hat(t + beat / 2, true, 0.16);
+    if (sec !== 'intro' && sec !== 'break' && inBar % 2 === 1) I.clap(t, 0.4);
+    if (sec === 'main' || sec === 'drop') I.bass(t + beat / 2, r - 12 + chord[0], beat * 0.35, 900, 0.22);
+    // off-beat supersaw stabs on the drop, held chords in the breakdown
+    if (sec === 'drop') I.supersaw(t + beat / 2, chord.map((n) => r + 24 + n), beat * 0.3);
+    if (sec === 'break' && inBar === 0) I.supersaw(t, chord.map((n) => r + 24 + n), beat * 3.6, 0.025);
+    // build: accelerating snare roll in the last 4 bars of the break
+    if (sec === 'break' && bar >= 20) {
+      const div = bar < 22 ? 2 : bar < 23 ? 4 : 8;
+      for (let s = 0; s < div; s++) I.snare(t + (s * beat) / div, 0.12 + (bar - 20) * 0.06);
+    }
+    if (bar === 16 && inBar === 0) I.riser(t, beat * 32);
+  }
+}
+
+function scheduleHouse(I, spec, beat, lead) {
+  const r = spec.root;
+  const organ = [0, 0, 12, 0, 10, 0, 7, 0]; // 8th-note organ bass pattern
+  for (let b = 0; b < spec.bars * 4; b++) {
+    const t = lead + b * beat, bar = Math.floor(b / 4), inBar = b % 4;
+    const sec = danceSection(bar);
+    const chord = PROG_CHORDS[bar % 4];
+    if (sec !== 'break' || bar >= 20) I.kick(t);
+    I.hat(t + beat / 2, sec === 'main' || sec === 'drop', 0.13);
+    if (sec !== 'intro' && inBar % 2 === 1) I.clap(t, 0.3);
+    if (sec !== 'intro' || bar >= 4) {
+      for (let s = 0; s < 2; s++) {
+        const n = organ[(inBar * 2 + s) % 8];
+        if (n || s) I.bass(t + (s * beat) / 2, r - 12 + chord[0] + n, beat * 0.3, 600, 0.2);
+      }
+    }
+    // classic piano chord stabs: on the "and" of 1 and on 3
+    if (sec === 'main' || sec === 'drop' || sec === 'break') {
+      if (inBar === 0) I.piano(t + beat / 2, chord.map((n) => r + 24 + n));
+      if (inBar === 2) I.piano(t + beat * 0.75, chord.map((n) => r + 24 + n), 0.07);
+    }
+  }
+}
+
+function scheduleBoomBap(I, spec, beat, lead) {
+  const r = spec.root;
+  const swing = beat * 0.08; // late 16ths give the head-nod feel
+  const loop = [[0, 3, 7, 10], [-4, 0, 3, 7]];
+  for (let b = 0; b < spec.bars * 4; b++) {
+    const t = lead + b * beat, bar = Math.floor(b / 4), inBar = b % 4;
+    const intro = bar < 4;
+    // kick on 1, the "and" of 2 and on 3 (classic boom-bap)
+    if (!intro) {
+      if (inBar === 0) I.kick(t, { decay: 0.4, to: 50 });
+      if (inBar === 1) I.kick(t + beat / 2 + swing, { peak: 0.7, decay: 0.3, to: 50 });
+      if (inBar === 2) I.kick(t, { decay: 0.4, to: 50 });
+      if (inBar % 2 === 1) I.snare(t, 0.45);
+    }
+    I.hat(t, false, 0.09);
+    I.hat(t + beat / 2 + swing, false, 0.06);
+    // dusty jazz keys loop, two bars
+    if (inBar === 0) I.keys(t, loop[bar % 2].map((n) => r + 24 + n), beat * 3.6);
+    if (!intro && (inBar === 0 || inBar === 2)) I.bass(t, r - 12 + loop[bar % 2][0], beat * 0.8, 300, 0.25);
+  }
+}
+
+function scheduleTrap(I, spec, beat, lead) {
+  const r = spec.root;
+  for (let b = 0; b < spec.bars * 4; b++) {
+    const t = lead + b * beat, bar = Math.floor(b / 4), inBar = b % 4;
+    const intro = bar < 4;
+    // half-time: snare/clap on beat 3, 808 follows the kick
+    if (!intro) {
+      if (inBar === 0) { I.kick(t, { decay: 0.2 }); I.sub808(t, r - 12, beat * 1.4); }
+      if (inBar === 1 && bar % 2 === 1) { I.kick(t + beat / 2, { decay: 0.2 }); I.sub808(t + beat / 2, r - 12 + 3, beat * 0.9); }
+      if (inBar === 2) { I.snare(t, 0.4); I.clap(t, 0.25); }
+    }
+    // hi-hat 8ths with 16th/triplet rolls at the end of every other bar
+    const roll = inBar === 3 && bar % 2 === 1;
+    const div = roll ? 6 : 2;
+    for (let s = 0; s < div; s++) I.hat(t + (s * beat) / div, false, roll ? 0.08 : 0.11);
+    if (inBar === 0 && bar % 2 === 0) I.pad(t, [r + 24, r + 27, r + 31], beat * 8, 0.022);
+    if (!intro && inBar === 0 && bar % 4 === 2) {
+      for (let s = 0; s < 4; s++) I.pluck(t + s * beat * 0.75, r + 36 + [0, 3, 7, 3][s], 0.05, 2000);
+    }
+  }
+}
+
+const SCHEDULERS = { prog: scheduleProg, edm: scheduleEdm, house: scheduleHouse, boombap: scheduleBoomBap, trap: scheduleTrap };
+
+// How long each one-shot sound needs to ring out (seconds), from its arguments.
+const SOUND_LENGTH = {
+  kick: () => 0.5, hat: () => 0.25, clap: () => 0.25, snare: () => 0.3, piano: () => 0.6, pluck: () => 0.3,
+  sub808: (a) => a[1] + 0.1, bass: (a) => a[1] + 0.1, supersaw: (a) => a[1] + 0.1,
+  pad: (a) => a[1] + 0.1, keys: (a) => a[1] + 0.1, riser: (a) => a[0] + 0.2,
+};
+
+async function renderSound(name, args, sampleRate) {
+  const len = Math.ceil(SOUND_LENGTH[name](args) * sampleRate);
+  const ctx = new OfflineAudioContext(1, len, sampleRate);
+  const out = ctx.createGain();
+  out.gain.value = 0.6;
+  out.connect(ctx.destination);
+  instruments(ctx, out)[name](0, ...args);
+  return (await ctx.startRendering()).getChannelData(0);
+}
+
+/**
+ * Scheduling thousands of live nodes in one OfflineAudioContext is very slow, so instead each
+ * distinct sound (instrument + arguments) is rendered once and then mixed onto the timeline in JS.
+ */
+async function renderDemo(spec, sampleRate = 44100) {
+  const beat = 60 / spec.bpm;
+  const lead = 0.05; // tiny lead-in so beat 1 isn't at sample 0
+  const events = [];
+  const recorder = new Proxy({}, { get: (_, name) => (t, ...args) => events.push([name, t, args]) });
+  SCHEDULERS[spec.style](recorder, spec, beat, lead);
+
+  const keyOf = (name, args) => name + JSON.stringify(args);
+  const pending = new Map();
+  for (const [name, , args] of events) {
+    const key = keyOf(name, args);
+    if (!pending.has(key)) pending.set(key, renderSound(name, args, sampleRate));
+  }
+  const sounds = new Map();
+  for (const [key, p] of pending) sounds.set(key, await p);
+
+  const len = Math.ceil((lead + spec.bars * 4 * beat + 1.5) * sampleRate);
+  const mix = new Float32Array(len);
+  for (const [name, t, args] of events) {
+    const snd = sounds.get(keyOf(name, args));
+    const start = Math.round(t * sampleRate);
+    const n = Math.min(snd.length, len - start);
+    for (let i = 0; i < n; i++) mix[start + i] += snd[i];
+  }
+  // gentle soft-clip in place of a bus compressor
+  for (let i = 0; i < len; i++) mix[i] = Math.tanh(mix[i] * 1.2) / 1.2;
+
+  const out = new AudioBuffer({ length: len, sampleRate, numberOfChannels: 2 });
+  out.copyToChannel(mix, 0);
+  out.copyToChannel(mix, 1);
+  return out;
+}
+
+return { DEMO_TRACKS, renderDemo };
+})();
+
+// ---- src/midi.js
+const { parseMessage, relativeDelta, MidiInput } = (() => {
+// Web MIDI input with MIDI-learn. Mapping key: "cc:<ch>:<num>" or "note:<ch>:<num>".
+
+const STORE_KEY = 'woo.midiMap.v1';
+
+function parseMessage(data) {
+  const [status, d1 = 0, d2 = 0] = data;
+  const cmd = status & 0xf0;
+  const ch = (status & 0x0f) + 1;
+  if (cmd === 0x90 || cmd === 0x80) {
+    return { type: 'note', ch, num: d1, value: cmd === 0x90 ? d2 : 0, key: `note:${ch}:${d1}` };
+  }
+  if (cmd === 0xb0) return { type: 'cc', ch, num: d1, value: d2, key: `cc:${ch}:${d1}` };
+  if (cmd === 0xe0) return { type: 'pitchbend', ch, num: 0, value: (d2 << 7) | d1, key: `pb:${ch}` };
+  return null;
+}
+
+/** Relative encoders: Pioneer-style centres on 64 (65 = +1), Numark-style is two's complement (127 = -1). */
+function relativeDelta(v) {
+  if (v >= 40 && v <= 88) return v - 64;
+  return v >= 64 ? v - 128 : v;
+}
+
+class MidiInput {
+  constructor({ onAction, onMessage, onDevices }) {
+    this.onAction = onAction;
+    this.onMessage = onMessage;
+    this.onDevices = onDevices;
+    this.access = null;
+    this.learning = null; // action name waiting for a control
+    this.map = this._loadMap();
+  }
+
+  get supported() { return typeof navigator !== 'undefined' && !!navigator.requestMIDIAccess; }
+
+  async init() {
+    if (!this.supported) throw new Error('Web MIDI is not supported in this browser. Use Chrome or Edge on desktop.');
+    this.access = await navigator.requestMIDIAccess({ sysex: false });
+    this.access.onstatechange = () => this._bind();
+    this._bind();
+  }
+
+  _bind() {
+    const names = [];
+    for (const input of this.access.inputs.values()) {
+      input.onmidimessage = (e) => this._handle(e, input.name);
+      if (input.state === 'connected') names.push(input.name);
+    }
+    this.onDevices?.(names);
+  }
+
+  _handle(e, deviceName) {
+    const msg = parseMessage(e.data);
+    if (!msg) return;
+    this.onMessage?.(msg, deviceName);
+
+    if (this.learning) {
+      // ignore note-offs while learning so releasing a button doesn't mis-map
+      if (msg.type === 'note' && msg.value === 0) return;
+      // one physical control → one action
+      for (const k of Object.keys(this.map)) if (this.map[k] === this.learning) delete this.map[k];
+      this.map[msg.key] = this.learning;
+      const learned = this.learning;
+      this.learning = null;
+      this._saveMap();
+      this.onAction?.({ learned, key: msg.key });
+      return;
+    }
+
+    const action = this.map[msg.key];
+    if (action) this.onAction?.({ action, msg });
+  }
+
+  learn(action) { this.learning = action; }
+  cancelLearn() { this.learning = null; }
+
+  keyFor(action) { return Object.keys(this.map).find((k) => this.map[k] === action) || null; }
+
+  unmap(action) {
+    for (const k of Object.keys(this.map)) if (this.map[k] === action) delete this.map[k];
+    this._saveMap();
+  }
+
+  clear() { this.map = {}; this._saveMap(); }
+
+  exportJson() { return JSON.stringify({ version: 1, map: this.map }, null, 2); }
+
+  importJson(text) {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed.map !== 'object') throw new Error('Not a woo mapping file');
+    this.map = { ...parsed.map };
+    this._saveMap();
+  }
+
+  _loadMap() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; }
+  }
+
+  _saveMap() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(this.map)); } catch { /* storage unavailable */ }
+  }
+}
+
+return { parseMessage, relativeDelta, MidiInput };
+})();
+
+// ---- src/main.js
+(() => {
+
+
+
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+// ---------------------------------------------------------------- actions
+const DECK_ACTIONS = [
+  ['play', 'Play / Pause', 'button'],
+  ['cue', 'Cue', 'button'],
+  ['sync', 'Sync', 'button'],
+  ['nudgeDown', 'Nudge back', 'button'],
+  ['nudgeUp', 'Nudge forward', 'button'],
+  ['jog', 'Jog wheel', 'rel'],
+  ['pitch', 'Tempo slider', 'abs'],
+  ['volume', 'Channel fader', 'abs'],
+  ['trim', 'Trim / gain', 'abs'],
+  ['eqHigh', 'EQ High', 'abs'],
+  ['eqMid', 'EQ Mid', 'abs'],
+  ['eqLow', 'EQ Low', 'abs'],
+  ['filter', 'Filter / CFX', 'abs'],
+];
+const ACTIONS = [
+  ...['A', 'B'].flatMap((d) => DECK_ACTIONS.map(([id, label, kind]) => ({ id: `${d}.${id}`, label: `Deck ${d} · ${label}`, kind }))),
+  { id: 'crossfader', label: 'Crossfader', kind: 'abs' },
+];
+const ACTION_KIND = Object.fromEntries(ACTIONS.map((a) => [a.id, a.kind]));
+
+// ---------------------------------------------------------------- state
+let ctx, master;
+const decks = {};
+const demoCache = new Map();
+let midi;
+
+function deckEl(id) { return $(`.deck[data-deck="${id}"]`); }
+function otherDeck(id) { return decks[id === 'A' ? 'B' : 'A']; }
+
+function setSlider(deckId, action, v) {
+  const root = deckId ? document : null;
+  const el = deckId
+    ? $(`[data-deck="${deckId}"] [data-action="${action}"]`, root)
+    : $(`[data-global="${action}"]`);
+  if (el) el.value = v;
+}
+
+function setCrossfader(v) {
+  const a = Math.cos((v * Math.PI) / 2);
+  const b = Math.sin((v * Math.PI) / 2);
+  decks.A.xfade.gain.setTargetAtTime(a, ctx.currentTime, 0.01);
+  decks.B.xfade.gain.setTargetAtTime(b, ctx.currentTime, 0.01);
+}
+
+/** Single entry point for UI, keyboard and MIDI. value: boolean (button), 0..1 (abs), ticks (rel). */
+function dispatch(actionId, value, { fromUi = false } = {}) {
+  if (!ctx) return;
+  if (actionId === 'crossfader') {
+    setCrossfader(value);
+    if (!fromUi) setSlider(null, 'crossfader', value);
+    return;
+  }
+  const [deckId, action] = actionId.split('.');
+  const deck = decks[deckId];
+  switch (action) {
+    case 'play': if (value) deck.togglePlay(); break;
+    case 'cue': if (value) deck.cue(); break;
+    case 'sync': if (value) sync(deckId); break;
+    case 'nudgeDown': deck.setBend(value ? -0.04 : 0); break;
+    case 'nudgeUp': deck.setBend(value ? 0.04 : 0); break;
+    case 'jog': deck.jog(value); break;
+    case 'pitch': deck.setPitch((value - 0.5) * 2 * PITCH_RANGE); break;
+    case 'volume': deck.setVolume(value); break;
+    case 'trim': deck.setTrim(value); break;
+    case 'eqHigh': deck.setEq('high', value); break;
+    case 'eqMid': deck.setEq('mid', value); break;
+    case 'eqLow': deck.setEq('low', value); break;
+    case 'filter': deck.setFilter(value); break;
+  }
+  if (!fromUi && ACTION_KIND[actionId] === 'abs') setSlider(deckId, action, value);
+}
+
+function sync(deckId) {
+  const deck = decks[deckId];
+  const master = otherDeck(deckId);
+  if (!deck.bpm || !master.effectiveBpm) return;
+  const p = master.effectiveBpm / deck.bpm - 1;
+  deck.setPitch(p);
+  setSlider(deckId, 'pitch', clamp(p / (2 * PITCH_RANGE) + 0.5, 0, 1));
+  if (deck.playing && master.playing) {
+    let d = master.beatPhase - deck.beatPhase;
+    d -= Math.round(d);
+    deck.seek(deck.position + d * (60 / deck.bpm));
+  }
+}
+
+// ---------------------------------------------------------------- loading
+async function loadIntoDeck(deckId, buffer, name) {
+  const deck = decks[deckId];
+  deck.load(buffer, name);
+  deck._peaks = null;
+  const el = deckEl(deckId);
+  $('.track-name', el).textContent = name;
+  $('.bpm', el).textContent = '…';
+  try {
+    const { bpm, firstBeat } = await analyzeTempo(buffer);
+    if (deck.buffer !== buffer) return; // a newer track was loaded meanwhile
+    deck.bpm = bpm;
+    deck.firstBeat = firstBeat;
+  } catch (err) {
+    console.error('Tempo analysis failed', err);
+    $('.bpm', el).textContent = '?';
+  }
+}
+
+async function loadDemo(deckId, demoId) {
+  const spec = DEMO_TRACKS.find((t) => t.id === demoId);
+  if (!spec) return;
+  let buf = demoCache.get(demoId);
+  if (!buf) {
+    $('.track-name', deckEl(deckId)).textContent = 'Rendering demo…';
+    buf = await renderDemo(spec, ctx.sampleRate);
+    demoCache.set(demoId, buf);
+  }
+  await loadIntoDeck(deckId, buf, spec.name);
+}
+
+async function loadFile(deckId, file) {
+  $('.track-name', deckEl(deckId)).textContent = 'Decoding…';
+  try {
+    const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+    await loadIntoDeck(deckId, buf, file.name.replace(/\.[^.]+$/, ''));
+  } catch (err) {
+    $('.track-name', deckEl(deckId)).textContent = 'Could not decode that file';
+    console.error(err);
+  }
+}
+
+// ---------------------------------------------------------------- UI wiring
+function wireDecks() {
+  for (const id of ['A', 'B']) {
+    for (const scope of $$(`[data-deck="${id}"]`)) {
+      for (const el of $$('[data-action]', scope)) {
+        const actionId = `${id}.${el.dataset.action}`;
+        if (el.tagName === 'BUTTON') {
+          const hold = ACTION_KIND[actionId] === 'button' && el.dataset.action.startsWith('nudge');
+          el.addEventListener('pointerdown', () => dispatch(actionId, true));
+          if (hold) {
+            for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+              el.addEventListener(ev, () => dispatch(actionId, false));
+            }
+          }
+        } else {
+          el.addEventListener('input', () => dispatch(actionId, Number(el.value), { fromUi: true }));
+          el.addEventListener('dblclick', () => {
+            const reset = el.dataset.action === 'volume' ? 0.8 : 0.5;
+            el.value = reset;
+            dispatch(actionId, reset, { fromUi: true });
+          });
+        }
+      }
+    }
+    const el = deckEl(id);
+    const sel = $('.demo-select', el);
+    const groups = {};
+    for (const t of DEMO_TRACKS) {
+      if (!groups[t.genre]) sel.append(groups[t.genre] = Object.assign(document.createElement('optgroup'), { label: t.genre }));
+      groups[t.genre].append(new Option(`${t.name.replace('Demo: ', '')} · ${t.bpm}`, t.id));
+    }
+    sel.addEventListener('change', () => { if (sel.value) loadDemo(id, sel.value); sel.value = ''; });
+    $('input[type=file]', el).addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (f) loadFile(id, f);
+      e.target.value = '';
+    });
+    el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drop'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drop'));
+    el.addEventListener('drop', (e) => {
+      e.preventDefault();
+      el.classList.remove('drop');
+      const f = e.dataTransfer.files[0];
+      if (f) loadFile(id, f);
+    });
+
+    const overview = $(`.wave-row[data-deck="${id}"] .wave-overview`);
+    overview.addEventListener('pointerdown', (e) => {
+      const deck = decks[id];
+      if (!deck.buffer) return;
+      const r = overview.getBoundingClientRect();
+      deck.seek(((e.clientX - r.left) / r.width) * deck.duration);
+    });
+  }
+  const xf = $('#crossfader');
+  xf.addEventListener('input', () => dispatch('crossfader', Number(xf.value), { fromUi: true }));
+  xf.addEventListener('dblclick', () => { xf.value = 0.5; dispatch('crossfader', 0.5); });
+}
+
+const KEYS = {
+  a: ['A.play', 'button'], s: ['A.cue', 'button'], d: ['A.nudgeDown', 'hold'], f: ['A.nudgeUp', 'hold'],
+  e: ['A.pitch', -1], r: ['A.pitch', 1],
+  j: ['B.play', 'button'], k: ['B.cue', 'button'], l: ['B.nudgeDown', 'hold'], ';': ['B.nudgeUp', 'hold'],
+  i: ['B.pitch', -1], o: ['B.pitch', 1],
+};
+
+function wireKeyboard() {
+  window.addEventListener('keydown', (e) => {
+    if (!ctx || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.matches('input[type=text], textarea, select')) return;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (e.target.matches('input[type=range]')) return;
+      const xf = $('#crossfader');
+      const v = clamp(Number(xf.value) + (e.key === 'ArrowRight' ? 0.05 : -0.05), 0, 1);
+      dispatch('crossfader', v);
+      e.preventDefault();
+      return;
+    }
+    const k = KEYS[e.key.toLowerCase()];
+    if (!k) return;
+    const [actionId, mode] = k;
+    if (typeof mode === 'number') {
+      const [deckId] = actionId.split('.');
+      const el = $(`.deck[data-deck="${deckId}"] [data-action="pitch"]`);
+      const v = clamp(Number(el.value) + mode * 0.00625, 0, 1); // 0.1% steps at ±8%
+      dispatch(actionId, v);
+    } else if (!e.repeat) {
+      dispatch(actionId, true);
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    const k = KEYS[e.key.toLowerCase()];
+    if (k && k[1] === 'hold') dispatch(k[0], false);
+  });
+}
+
+// ---------------------------------------------------------------- MIDI panel
+function renderMapRows() {
+  const tbody = $('#map-rows');
+  tbody.replaceChildren(...ACTIONS.map((a) => {
+    const tr = document.createElement('tr');
+    const key = midi.keyFor(a.id);
+    const learning = midi.learning === a.id;
+    tr.innerHTML = `<td>${a.label}</td><td class="mono">${learning ? 'move a control…' : key || '—'}</td>
+      <td><button class="ghost learn${learning ? ' active' : ''}">${learning ? 'Cancel' : 'Learn'}</button></td>
+      <td>${key ? '<button class="ghost unmap" aria-label="Remove mapping">×</button>' : ''}</td>`;
+    $('.learn', tr).addEventListener('click', () => {
+      learning ? midi.cancelLearn() : midi.learn(a.id);
+      renderMapRows();
+    });
+    $('.unmap', tr)?.addEventListener('click', () => { midi.unmap(a.id); renderMapRows(); });
+    return tr;
+  }));
+}
+
+function logMidi(msg, device) {
+  const log = $('#midi-log');
+  const li = document.createElement('li');
+  const mapped = midi.map[msg.key];
+  li.innerHTML = `<span class="mono">${msg.key}</span> <b>${msg.value}</b> <span class="dim">${device}${mapped ? ' → ' + mapped : ''}</span>`;
+  log.prepend(li);
+  while (log.children.length > 40) log.lastChild.remove();
+}
+
+function handleMidiAction({ action, msg, learned }) {
+  if (learned) { renderMapRows(); return; }
+  const kind = ACTION_KIND[action];
+  if (kind === 'button') {
+    const pressed = msg.value > 0;
+    // nudge buttons are momentary; everything else fires on press
+    if (action.endsWith('nudgeDown') || action.endsWith('nudgeUp')) dispatch(action, pressed);
+    else if (pressed) dispatch(action, true);
+  } else if (kind === 'rel') {
+    dispatch(action, relativeDelta(msg.value));
+  } else {
+    const v = msg.type === 'pitchbend' ? msg.value / 16383 : msg.value / 127;
+    dispatch(action, v);
+  }
+}
+
+function wireMidiPanel() {
+  const panel = $('#midi-panel');
+  $('#toggle-midi-panel').addEventListener('click', () => { panel.hidden = !panel.hidden; renderMapRows(); });
+  $('#close-midi-panel').addEventListener('click', () => { panel.hidden = true; midi.cancelLearn(); });
+  $('#export-map').addEventListener('click', () => {
+    const blob = new Blob([midi.exportJson()], { type: 'application/json' });
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'woo-mapping.json' });
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  $('#import-map').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try { midi.importJson(await f.text()); renderMapRows(); } catch (err) { alert(err.message); }
+    e.target.value = '';
+  });
+  $('#clear-map').addEventListener('click', () => {
+    if (confirm('Remove all controller mappings?')) { midi.clear(); renderMapRows(); }
+  });
+}
+
+// ---------------------------------------------------------------- drawing
+function sizeCanvas(c) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+  if (c.width !== w || c.height !== h) { c.width = w; c.height = h; return true; }
+  return false;
+}
+
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+function overviewPeaks(deck, n) {
+  if (deck._peaks && deck._peaks.length === n) return deck._peaks;
+  const data = deck.buffer.getChannelData(0);
+  const per = Math.floor(data.length / n);
+  const peaks = new Float32Array(n);
+  const stride = Math.max(1, Math.floor(per / 64));
+  for (let i = 0; i < n; i++) {
+    let m = 0;
+    for (let j = i * per; j < (i + 1) * per; j += stride) { const v = Math.abs(data[j]); if (v > m) m = v; }
+    peaks[i] = m;
+  }
+  return (deck._peaks = peaks);
+}
+
+function drawDeck(id, colors) {
+  const deck = decks[id];
+  const row = $(`.wave-row[data-deck="${id}"]`);
+  const zoom = $('.wave-zoom', row), over = $('.wave-overview', row);
+  sizeCanvas(zoom); sizeCanvas(over);
+  const zc = zoom.getContext('2d'), oc = over.getContext('2d');
+  zc.clearRect(0, 0, zoom.width, zoom.height);
+  oc.clearRect(0, 0, over.width, over.height);
+  if (!deck.buffer) return;
+
+  const color = id === 'A' ? colors.a : colors.b;
+  const pos = deck.position;
+
+  // overview
+  const n = over.width;
+  const peaks = overviewPeaks(deck, n);
+  const playedX = (pos / deck.duration) * n;
+  const mid = over.height / 2;
+  for (let x = 0; x < n; x++) {
+    oc.fillStyle = x < playedX ? colors.dim : color;
+    const h = peaks[x] * mid;
+    oc.fillRect(x, mid - h, 1, h * 2 || 1);
+  }
+  oc.fillStyle = colors.cue;
+  oc.fillRect((deck.cuePoint / deck.duration) * n - 1, 0, 2, over.height);
+  oc.fillStyle = colors.fg;
+  oc.fillRect(playedX - 1, 0, 2, over.height);
+
+  // zoomed, centred on the playhead; window scales with rate so matched tempos line up visually
+  const half = 3 * deck.rate;
+  const data = deck.buffer.getChannelData(0);
+  const sr = deck.buffer.sampleRate;
+  const W = zoom.width, H = zoom.height, zm = H / 2;
+  const secPerPx = (half * 2) / W;
+  const per = secPerPx * sr;
+  const stride = Math.max(1, Math.floor(per / 24));
+  zc.fillStyle = color;
+  for (let x = 0; x < W; x++) {
+    const t0 = pos - half + x * secPerPx;
+    if (t0 < 0 || t0 > deck.duration) continue;
+    const s0 = Math.floor(t0 * sr), s1 = Math.min(data.length, s0 + per);
+    let m = 0;
+    for (let j = s0; j < s1; j += stride) { const v = Math.abs(data[j]); if (v > m) m = v; }
+    const h = m * zm * 0.95;
+    zc.fillRect(x, zm - h, 1, h * 2 || 1);
+  }
+  if (deck.bpm) {
+    const beatLen = 60 / deck.bpm;
+    let k = Math.ceil((pos - half - deck.firstBeat) / beatLen);
+    for (let t = deck.firstBeat + k * beatLen; t < pos + half; t += beatLen, k++) {
+      const x = (t - (pos - half)) / secPerPx;
+      const downbeat = ((k % 4) + 4) % 4 === 0;
+      zc.fillStyle = downbeat ? colors.fg : colors.grid;
+      zc.fillRect(Math.round(x), 0, downbeat ? 2 : 1, H);
+    }
+  }
+  zc.fillStyle = colors.fg;
+  zc.fillRect(W / 2 - 1, 0, 2, H);
+}
+
+function updateReadouts() {
+  for (const id of ['A', 'B']) {
+    const deck = decks[id];
+    const el = deckEl(id);
+    if (deck.bpm) $('.bpm', el).textContent = deck.effectiveBpm.toFixed(2);
+    $('.pitch-readout', el).textContent = `${deck.pitch >= 0 ? '+' : ''}${(deck.pitch * 100).toFixed(2)}%`;
+    $('.time', el).textContent = deck.buffer ? `${fmtTime(deck.position)} / ${fmtTime(deck.duration)}` : '0:00';
+    $('.play', el).classList.toggle('on', deck.playing);
+    const lvl = clamp(deck.level() * 2.5, 0, 1);
+    $(`.channel[data-deck="${id}"] .meter-fill`).style.transform = `scaleY(${lvl})`;
+  }
+
+  const { A, B } = decks;
+  const verdict = $('#match-verdict');
+  const dot = $('#phase-dot');
+  if (!A.bpm || !B.bpm) {
+    $('#bpm-diff').textContent = '–';
+    verdict.textContent = 'Load two tracks';
+    verdict.className = 'verdict';
+    dot.style.left = '50%';
+    return;
+  }
+  const diff = A.effectiveBpm - B.effectiveBpm;
+  $('#bpm-diff').textContent = `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}`;
+  if (!A.playing || !B.playing) {
+    verdict.textContent = 'Play both decks';
+    verdict.className = 'verdict';
+    dot.style.left = '50%';
+    return;
+  }
+  let ph = A.beatPhase - B.beatPhase;
+  ph -= Math.round(ph); // -0.5..0.5 beats
+  dot.style.left = `${50 + ph * 100}%`;
+  const tempoOk = Math.abs(diff) < 0.05;
+  const phaseOk = Math.abs(ph) < 0.03;
+  dot.classList.toggle('good', tempoOk && phaseOk);
+  if (tempoOk && phaseOk) { verdict.textContent = 'Locked in'; verdict.className = 'verdict good'; }
+  else if (tempoOk) { verdict.textContent = `Tempo matched — nudge ${ph > 0 ? 'A back or B forward' : 'A forward or B back'}`; verdict.className = 'verdict warn'; }
+  else { verdict.textContent = `Deck ${diff > 0 ? 'A' : 'B'} is faster — adjust tempo`; verdict.className = 'verdict bad'; }
+}
+
+function frame() {
+  const colors = {
+    a: cssVar('--deck-a'), b: cssVar('--deck-b'), fg: cssVar('--fg'),
+    dim: cssVar('--wave-played'), grid: cssVar('--grid'), cue: cssVar('--cue'),
+  };
+  drawDeck('A', colors);
+  drawDeck('B', colors);
+  updateReadouts();
+  requestAnimationFrame(frame);
+}
+
+// ---------------------------------------------------------------- boot
+async function start() {
+  ctx = new AudioContext({ latencyHint: 'interactive' });
+  master = ctx.createGain();
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -3;
+  limiter.ratio.value = 12;
+  master.connect(limiter).connect(ctx.destination);
+  decks.A = new Deck(ctx, master, 'A');
+  decks.B = new Deck(ctx, master, 'B');
+  setCrossfader(0.5);
+
+  $('#start-overlay').hidden = true;
+  requestAnimationFrame(frame);
+
+  // preload demos so there's something to mix right away
+  loadDemo('A', 'prog128');
+  loadDemo('B', 'house124');
+
+  const status = $('#midi-status');
+  try {
+    await midi.init();
+  } catch (err) {
+    status.textContent = 'MIDI: unavailable';
+    status.title = err.message;
+    status.classList.add('bad');
+  }
+}
+
+midi = new MidiInput({
+  onAction: handleMidiAction,
+  onMessage: logMidi,
+  onDevices: (names) => {
+    const status = $('#midi-status');
+    status.textContent = names.length ? `MIDI: ${names[0]}${names.length > 1 ? ` +${names.length - 1}` : ''}` : 'MIDI: no device';
+    status.classList.toggle('good', names.length > 0);
+    $('#midi-devices').textContent = names.length ? names.join(', ') : 'No controller detected — plug one in.';
+  },
+});
+
+wireDecks();
+wireKeyboard();
+wireMidiPanel();
+$('#start-btn').addEventListener('click', start, { once: true });
+
+})();
+})();
+</script>
+</body>
+</html>
