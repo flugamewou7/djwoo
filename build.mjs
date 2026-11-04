@@ -2,7 +2,7 @@
 // Usage: node build.mjs
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 
-const order = ['src/deck.js', 'src/bpm.js', 'src/demo-tracks.js', 'src/midi.js', 'src/main.js'];
+const order = ['src/deck.js', 'src/bpm.js', 'src/demo-tracks.js', 'src/midi.js', 'src/lessons.js', 'src/main.js'];
 // each module gets its own scope; its exports are returned and destructured for later modules
 const js = order.map((f) => {
   const src = readFileSync(f, 'utf8');

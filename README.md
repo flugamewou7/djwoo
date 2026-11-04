@@ -17,6 +17,20 @@ npx serve .
 
 Then open the printed `localhost` URL in **Chrome or Edge on desktop**. Safari doesn't support Web MIDI. It can also be hosted on GitHub Pages as-is.
 
+## Learn mode
+
+Click **Start learning** (or **Learn** in the top bar) for the course:
+
+1. **Deck basics** (tutorial): play, cue, crossfader, EQ kill, filter
+2. **Beatmatching 101** (tutorial): match the tempo with the pitch slider, align the kicks with nudges, hold the lock
+3. **Beatmatch: Warm-up** (scored, easy): prog vs house, meter and grid on
+4. **The EQ bass swap** (tutorial): the classic house/prog transition
+5. **Beatmatch: Main stage** (scored, medium): EDM vs house, phase meter hidden
+6. **Beatmatch: Hip-hop doubles** (scored, medium): two copies of a 90 BPM boom-bap beat
+7. **Beatmatch: By ear** (scored, hard): no BPM numbers, meter, grid or sync
+
+Tutorials highlight the control to use and move on when you do it. Every step has **Show me**, and every challenge has **Watch demo**, which plays it through for you. Challenges start deck B at a random tempo offset and off the beat. You pass by holding a lock (tempo within 0.1 BPM, kicks within ~3% of a beat) for 8 beats. Scoring out of 1000: speed 600, kick alignment 300, tempo accuracy 100, giving 1–3 stars. Progress and best scores are saved in the browser.
+
 ## What's in it
 
 - **Two decks** with play/pause, CDJ-style cue, tempo slider (±8%), pitch-bend nudge, jog wheel (bends while playing, scrubs while stopped), and sync.
@@ -46,5 +60,5 @@ src/midi.js         Web MIDI input + MIDI learn
 ## Next up
 
 - Commit default mappings for the DDJ-FLX4 and Numark controllers, recorded from real hardware with the MIDI monitor
-- Lessons and scoring: beatmatch by ear (sync disabled), EQ bass swap, phrase-aligned drops, 128 → 90 tempo transitions for rap sets
+- More lessons: phrase-aligned drops, filter transitions, 128 → 90 tempo changes for rap sets
 - Hot cues and loops

@@ -28,6 +28,7 @@ export class MidiInput {
     this.access = null;
     this.learning = null; // action name waiting for a control
     this.map = this._loadMap();
+    this.msb = new Map(); // last MSB per "ch:cc" for 14-bit controls
   }
 
   get supported() { return typeof navigator !== 'undefined' && !!navigator.requestMIDIAccess; }
@@ -52,6 +53,19 @@ export class MidiInput {
     const msg = parseMessage(e.data);
     if (!msg) return;
     this.onMessage?.(msg, deviceName);
+
+    if (msg.type === 'cc') {
+      // 14-bit pair: remember the MSB; when its LSB (CC + 32) arrives, send a high-resolution value
+      if (msg.num < 32) this.msb.set(`${msg.ch}:${msg.num}`, msg.value);
+      if (msg.num >= 32 && msg.num < 64 && !this.learning) {
+        const msbKey = `cc:${msg.ch}:${msg.num - 32}`;
+        const msb = this.msb.get(`${msg.ch}:${msg.num - 32}`);
+        if (this.map[msbKey] && msb !== undefined && !this.map[msg.key]) {
+          this.onAction?.({ action: this.map[msbKey], msg: { ...msg, key: msbKey, hiRes: ((msb << 7) | msg.value) / 16383 } });
+          return;
+        }
+      }
+    }
 
     if (this.learning) {
       // ignore note-offs while learning so releasing a button doesn't mis-map

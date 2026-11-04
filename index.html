@@ -10,6 +10,7 @@
   <header class="topbar">
     <h1>woo <span>dj trainer</span></h1>
     <div class="status">
+      <button id="open-learn" class="learn-btn">Learn</button>
       <span id="midi-status" class="pill">MIDI: off</span>
       <button id="toggle-midi-panel" class="ghost">Controller setup</button>
     </div>
@@ -19,11 +20,15 @@
     <div class="overlay-card">
       <h2>Plug in your controller, then start</h2>
       <p>Works in Chrome or Edge on desktop. A DDJ-FLX4, Numark Party Mix/Platinum FX, or any MIDI controller works &mdash; or just use the keyboard.</p>
-      <button id="start-btn" class="primary">Start</button>
+      <div class="overlay-btns">
+        <button id="start-learn-btn" class="primary">Start learning</button>
+        <button id="start-btn" class="ghost">Free play</button>
+      </div>
     </div>
   </div>
 
   <main>
+    <section id="coach" class="coach" hidden aria-live="polite"></section>
     <section class="waves">
       <div class="wave-row" data-deck="A">
         <canvas class="wave-zoom"></canvas>
@@ -128,6 +133,21 @@
       &nbsp; <b>Crossfader:</b> <kbd>&larr;</kbd>/<kbd>&rarr;</kbd></p>
     </details>
   </main>
+
+  <div id="learn-panel" class="overlay" hidden>
+    <div class="overlay-card learn-card">
+      <div class="midi-head">
+        <h2>Learn to mix</h2>
+        <button id="close-learn" class="ghost" aria-label="Close">&times;</button>
+      </div>
+      <p class="hint">Tutorials walk you through each move. Challenges score you. Stuck? Every lesson has a demo that plays it through for you.</p>
+      <ol id="course-list" class="course-list"></ol>
+      <div class="learn-foot">
+        <button id="reset-progress" class="ghost danger">Reset progress</button>
+        <button id="course-continue" class="primary">Start the course</button>
+      </div>
+    </div>
+  </div>
 
   <aside id="midi-panel" class="midi-panel" hidden>
     <div class="midi-head">

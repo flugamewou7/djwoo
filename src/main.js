@@ -2,6 +2,7 @@ import { Deck, PITCH_RANGE } from './deck.js';
 import { analyzeTempo } from './bpm.js';
 import { DEMO_TRACKS, renderDemo } from './demo-tracks.js';
 import { MidiInput, relativeDelta } from './midi.js';
+import { createLessons, TEMPO_OK } from './lessons.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -35,6 +36,9 @@ let ctx, master;
 const decks = {};
 const demoCache = new Map();
 let midi;
+let lessons;
+let startPromise = null;
+const flags = { hideGrid: false, noSync: false }; // set by lessons
 
 function deckEl(id) { return $(`.deck[data-deck="${id}"]`); }
 function otherDeck(id) { return decks[id === 'A' ? 'B' : 'A']; }
@@ -57,6 +61,7 @@ function setCrossfader(v) {
 /** Single entry point for UI, keyboard and MIDI. value: boolean (button), 0..1 (abs), ticks (rel). */
 function dispatch(actionId, value, { fromUi = false } = {}) {
   if (!ctx) return;
+  lessons?.onAction(actionId, value);
   if (actionId === 'crossfader') {
     setCrossfader(value);
     if (!fromUi) setSlider(null, 'crossfader', value);
@@ -85,7 +90,7 @@ function dispatch(actionId, value, { fromUi = false } = {}) {
 function sync(deckId) {
   const deck = decks[deckId];
   const master = otherDeck(deckId);
-  if (!deck.bpm || !master.effectiveBpm) return;
+  if (flags.noSync || !deck.bpm || !master.effectiveBpm) return;
   const p = master.effectiveBpm / deck.bpm - 1;
   deck.setPitch(p);
   setSlider(deckId, 'pitch', clamp(p / (2 * PITCH_RANGE) + 0.5, 0, 1));
@@ -273,7 +278,7 @@ function handleMidiAction({ action, msg, learned }) {
   } else if (kind === 'rel') {
     dispatch(action, relativeDelta(msg.value));
   } else {
-    const v = msg.type === 'pitchbend' ? msg.value / 16383 : msg.value / 127;
+    const v = msg.hiRes ?? (msg.type === 'pitchbend' ? msg.value / 16383 : msg.value / 127);
     dispatch(action, v);
   }
 }
@@ -369,7 +374,7 @@ function drawDeck(id, colors) {
     const h = m * zm * 0.95;
     zc.fillRect(x, zm - h, 1, h * 2 || 1);
   }
-  if (deck.bpm) {
+  if (deck.bpm && !flags.hideGrid) {
     const beatLen = 60 / deck.bpm;
     let k = Math.ceil((pos - half - deck.firstBeat) / beatLen);
     for (let t = deck.firstBeat + k * beatLen; t < pos + half; t += beatLen, k++) {
@@ -416,7 +421,7 @@ function updateReadouts() {
   let ph = A.beatPhase - B.beatPhase;
   ph -= Math.round(ph); // -0.5..0.5 beats
   dot.style.left = `${50 + ph * 100}%`;
-  const tempoOk = Math.abs(diff) < 0.05;
+  const tempoOk = Math.abs(diff) < TEMPO_OK;
   const phaseOk = Math.abs(ph) < 0.03;
   dot.classList.toggle('good', tempoOk && phaseOk);
   if (tempoOk && phaseOk) { verdict.textContent = 'Locked in'; verdict.className = 'verdict good'; }
@@ -432,11 +437,17 @@ function frame() {
   drawDeck('A', colors);
   drawDeck('B', colors);
   updateReadouts();
+  lessons.tick();
   requestAnimationFrame(frame);
 }
 
 // ---------------------------------------------------------------- boot
-async function start() {
+function start() {
+  if (!startPromise) startPromise = boot();
+  return startPromise;
+}
+
+async function boot() {
   ctx = new AudioContext({ latencyHint: 'interactive' });
   master = ctx.createGain();
   const limiter = ctx.createDynamicsCompressor();
@@ -451,18 +462,45 @@ async function start() {
   requestAnimationFrame(frame);
 
   // preload demos so there's something to mix right away
-  loadDemo('A', 'prog128');
-  loadDemo('B', 'house124');
+  const preload = Promise.all([loadDemo('A', 'prog128'), loadDemo('B', 'house124')]);
 
-  const status = $('#midi-status');
-  try {
-    await midi.init();
-  } catch (err) {
+  midi.init().catch((err) => {
+    const status = $('#midi-status');
     status.textContent = 'MIDI: unavailable';
     status.title = err.message;
     status.classList.add('bad');
-  }
+  });
+  await preload;
 }
+
+// ---------------------------------------------------------------- learn mode
+let highlighted = [];
+function highlight(selectors) {
+  for (const el of highlighted) el.classList.remove('tut-target');
+  highlighted = [];
+  if (!selectors) return;
+  for (const sel of [].concat(selectors)) {
+    for (const el of $$(sel)) { el.classList.add('tut-target'); highlighted.push(el); }
+  }
+  highlighted[0]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function controlValue(deckId, action) {
+  const el = deckId ? $(`[data-deck="${deckId}"] [data-action="${action}"]`) : $(`[data-global="${action}"]`);
+  return Number(el.value);
+}
+
+lessons = createLessons({
+  decks,
+  flags,
+  ready: start,
+  loadDemo,
+  sync,
+  highlight,
+  control: controlValue,
+  setControl: (deckId, action, v) => dispatch(deckId ? `${deckId}.${action}` : action, v),
+  press: (actionId) => dispatch(actionId, true),
+});
 
 midi = new MidiInput({
   onAction: handleMidiAction,
@@ -478,4 +516,6 @@ midi = new MidiInput({
 wireDecks();
 wireKeyboard();
 wireMidiPanel();
-$('#start-btn').addEventListener('click', start, { once: true });
+$('#start-btn').addEventListener('click', start);
+$('#start-learn-btn').addEventListener('click', async () => { await start(); lessons.openPanel(); });
+$('#open-learn').addEventListener('click', async () => { await start(); lessons.openPanel(); });
