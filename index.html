@@ -10,7 +10,9 @@
   <header class="topbar">
     <h1>djwoo <span>dj trainer</span></h1>
     <div class="status">
+      <button id="open-gigs" class="gig-btn">Gigs</button>
       <button id="open-learn" class="learn-btn">Learn</button>
+      <button id="open-library" class="ghost">Library</button>
       <span id="midi-status" class="pill">MIDI: off</span>
       <button id="toggle-midi-panel" class="ghost">Controller setup</button>
     </div>
@@ -21,6 +23,7 @@
       <h2>Plug in your controller, then start</h2>
       <p>Works in Chrome or Edge on desktop. A DDJ-FLX4, Numark Party Mix/Platinum FX, or any MIDI controller works &mdash; or just use the keyboard.</p>
       <div class="overlay-btns">
+        <button id="start-gig-btn" class="gig-btn">Play a gig</button>
         <button id="start-learn-btn" class="primary">Start learning</button>
         <button id="start-btn" class="ghost">Free play</button>
       </div>
@@ -29,6 +32,25 @@
 
   <main>
     <section id="coach" class="coach" hidden aria-live="polite"></section>
+    <section id="stage" class="stage" hidden>
+      <canvas id="stage-canvas"></canvas>
+      <div class="hud">
+        <div class="hud-top">
+          <div class="hud-venue"><b id="hud-venue"></b><small id="hud-crowd"></small></div>
+          <div class="hype"><span class="hype-label">Hype</span><div class="hype-bar"><div id="hype-fill"></div></div><span id="hype-val" class="mono">35</span></div>
+          <div class="hud-time mono" id="hud-time">waiting…</div>
+        </div>
+        <div id="toasts" class="toasts" aria-live="polite"></div>
+        <div class="hud-bottom">
+          <button id="cam-btn" class="hud-btn">Camera <kbd>V</kbd></button>
+          <button id="shout-btn" class="hud-btn">Hype mic <kbd>M</kbd></button>
+          <span class="hud-spacer"></span>
+          <button id="exit-gig" class="hud-btn">Leave</button>
+          <button id="end-set" class="hud-btn end">End set</button>
+        </div>
+        <div id="gig-result" class="gig-result" hidden></div>
+      </div>
+    </section>
     <section class="waves">
       <div class="wave-row" data-deck="A">
         <canvas class="wave-zoom"></canvas>
@@ -134,6 +156,44 @@
     </details>
   </main>
 
+  <div id="venue-panel" class="overlay" hidden>
+    <div class="overlay-card learn-card venue-card-wrap">
+      <div class="midi-head">
+        <h2>Pick a venue</h2>
+        <button id="close-venues" class="ghost" aria-label="Close">&times;</button>
+      </div>
+      <p class="hint">Keep the crowd's hype up: blend smoothly, land your drops, avoid train wrecks and dead air. Earn stars to unlock bigger stages. <span id="venue-stars" class="stars"></span></p>
+      <ol id="venue-list" class="venue-list"></ol>
+      <label class="unlock-toggle"><input type="checkbox" id="unlock-all"> Unlock all venues (practice)</label>
+    </div>
+  </div>
+
+  <aside id="lib-panel" class="lib-panel" hidden>
+    <div class="midi-head">
+      <h2>Library</h2>
+      <button id="close-lib" class="ghost" aria-label="Close">&times;</button>
+    </div>
+    <p class="hint">Plug in a USB stick (rekordbox exports work too) or pick any music folder. Files stay on your computer.</p>
+    <div class="midi-actions">
+      <button id="lib-open-folder" class="primary">Open USB / folder</button>
+      <button id="lib-add-files" class="ghost">Add files</button>
+      <button id="lib-analyze" class="ghost">Analyse BPM</button>
+      <button id="lib-clear" class="ghost danger">Clear</button>
+    </div>
+    <input id="lib-folder-input" type="file" webkitdirectory multiple hidden>
+    <input id="lib-files-input" type="file" accept="audio/*" multiple hidden>
+    <div class="lib-tools">
+      <input id="lib-search" type="search" placeholder="Search artist, title, folder">
+      <select id="lib-sort" aria-label="Sort by">
+        <option value="name">Title</option><option value="artist">Artist</option>
+        <option value="bpm">BPM</option><option value="folder">Folder</option>
+      </select>
+    </div>
+    <div class="lib-meta"><span id="lib-count"></span> <span id="lib-status" class="dim"></span></div>
+    <p id="lib-empty" class="lib-empty">No tracks yet. Open your USB stick or a music folder, or drag one here.</p>
+    <table class="lib-table"><tbody id="lib-rows"></tbody></table>
+  </aside>
+
   <div id="learn-panel" class="overlay" hidden>
     <div class="overlay-card learn-card">
       <div class="midi-head">
@@ -166,6 +226,7 @@
     <ol id="midi-log" class="midi-log"></ol>
   </aside>
 
+  <script src="vendor/three.min.js"></script>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

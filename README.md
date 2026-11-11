@@ -17,6 +17,20 @@ npx serve .
 
 Then open the printed `localhost` URL in **Chrome or Edge on desktop**. Safari doesn't support Web MIDI. It can also be hosted on GitHub Pages as-is.
 
+## Gig mode (3D)
+
+Click **Play a gig** (or **Gigs** in the top bar), pick a venue and perform for a 3D crowd that reacts to your mixing:
+
+- **Hype goes up** with smooth, beatmatched blends, landing a drop after a breakdown, fresh tracks, bass-heavy energy, and the hype mic (`M`).
+- **Hype goes down** with train wrecks (two tracks audible but not beatmatched), dead air, and playing one track too long.
+- **The crowd shows it:** they bounce on the beat, put their hands up as hype climbs, raise phones in breakdowns and go wild on drops. More people pile in when it's going off and drift away when it isn't.
+- **Venues** (original, each inspired by a classic kind of place to play): The Basement, Rooftop Block Party, Sunset Terrace, Neon Warehouse, Canyon Amphitheater and Festival Mainstage. Earn stars to unlock bigger stages, or tick *Unlock all venues* to practise anywhere.
+- **Cameras:** `V` cycles through DJ view, crowd view and wide shot. **End set** rates you on average hype, blends, drops and wrecks.
+
+## Library (USB / folders)
+
+Click **Library**, then **Open USB / folder** and pick a USB stick or any music folder. rekordbox-exported USBs work, because the library scans every subfolder. You can also add loose files or drag a folder onto the panel. Search, sort by title, artist, BPM or folder, run **Analyse BPM** on everything, and load any track to deck A or B. Files never leave your computer.
+
 ## Learn mode
 
 Click **Start learning** (or **Learn** in the top bar) for the course:
@@ -55,6 +69,10 @@ src/deck.js         audio graph per deck (playback, EQ, filter, faders)
 src/bpm.js          offline tempo + beat-phase detection
 src/demo-tracks.js  synthesised genre practice tracks
 src/midi.js         Web MIDI input + MIDI learn
+src/lessons.js      Learn mode: tutorials, scored challenges, demos
+src/gig.js          3D gig mode: venues, crowd, hype (Three.js)
+src/library.js      USB / folder music library
+vendor/three.min.js Three.js r159 (MIT)
 ```
 
 ## Next up

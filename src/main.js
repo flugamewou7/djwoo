@@ -3,6 +3,8 @@ import { analyzeTempo } from './bpm.js';
 import { DEMO_TRACKS, renderDemo } from './demo-tracks.js';
 import { MidiInput, relativeDelta } from './midi.js';
 import { createLessons, TEMPO_OK } from './lessons.js';
+import { createGig } from './gig.js';
+import { createLibrary } from './library.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -37,6 +39,9 @@ const decks = {};
 const demoCache = new Map();
 let midi;
 let lessons;
+let gig;
+let library;
+let masterTap;
 let startPromise = null;
 const flags = { hideGrid: false, noSync: false }; // set by lessons
 
@@ -111,9 +116,10 @@ async function loadIntoDeck(deckId, buffer, name) {
   $('.bpm', el).textContent = '…';
   try {
     const { bpm, firstBeat } = await analyzeTempo(buffer);
-    if (deck.buffer !== buffer) return; // a newer track was loaded meanwhile
+    if (deck.buffer !== buffer) return null; // a newer track was loaded meanwhile
     deck.bpm = bpm;
     deck.firstBeat = firstBeat;
+    return { bpm, firstBeat };
   } catch (err) {
     console.error('Tempo analysis failed', err);
     $('.bpm', el).textContent = '?';
@@ -136,10 +142,11 @@ async function loadFile(deckId, file) {
   $('.track-name', deckEl(deckId)).textContent = 'Decoding…';
   try {
     const buf = await ctx.decodeAudioData(await file.arrayBuffer());
-    await loadIntoDeck(deckId, buf, file.name.replace(/\.[^.]+$/, ''));
+    return await loadIntoDeck(deckId, buf, file.name.replace(/\.[^.]+$/, ''));
   } catch (err) {
     $('.track-name', deckEl(deckId)).textContent = 'Could not decode that file';
     console.error(err);
+    return null;
   }
 }
 
@@ -174,11 +181,12 @@ function wireDecks() {
       if (!groups[t.genre]) sel.append(groups[t.genre] = Object.assign(document.createElement('optgroup'), { label: t.genre }));
       groups[t.genre].append(new Option(`${t.name.replace('Demo: ', '')} · ${t.bpm}`, t.id));
     }
-    sel.addEventListener('change', () => { if (sel.value) loadDemo(id, sel.value); sel.value = ''; });
+    sel.addEventListener('change', () => { if (sel.value) loadDemo(id, sel.value); sel.value = ''; sel.blur(); });
     $('input[type=file]', el).addEventListener('change', (e) => {
       const f = e.target.files[0];
       if (f) loadFile(id, f);
       e.target.value = '';
+      e.target.blur();
     });
     el.addEventListener('dragover', (e) => { e.preventDefault(); el.classList.add('drop'); });
     el.addEventListener('dragleave', () => el.classList.remove('drop'));
@@ -438,6 +446,7 @@ function frame() {
   drawDeck('B', colors);
   updateReadouts();
   lessons.tick();
+  gig.tick();
   requestAnimationFrame(frame);
 }
 
@@ -454,6 +463,9 @@ async function boot() {
   limiter.threshold.value = -3;
   limiter.ratio.value = 12;
   master.connect(limiter).connect(ctx.destination);
+  masterTap = ctx.createAnalyser();
+  masterTap.fftSize = 2048;
+  master.connect(masterTap);
   decks.A = new Deck(ctx, master, 'A');
   decks.B = new Deck(ctx, master, 'B');
   setCrossfader(0.5);
@@ -516,6 +528,25 @@ midi = new MidiInput({
 wireDecks();
 wireKeyboard();
 wireMidiPanel();
+gig = createGig({
+  decks,
+  ready: start,
+  analyser: () => masterTap,
+  onGigStart: () => lessons.stop(),
+});
+
+library = createLibrary({
+  ready: start,
+  loadFile,
+  analyzeFile: async (file) => analyzeTempo(await ctx.decodeAudioData(await file.arrayBuffer())),
+});
+
 $('#start-btn').addEventListener('click', start);
+$('#start-gig-btn').addEventListener('click', async () => { await start(); gig.openPanel(); });
+$('#open-gigs').addEventListener('click', async () => { await start(); gig.openPanel(); });
+$('#open-library').addEventListener('click', () => library.open());
 $('#start-learn-btn').addEventListener('click', async () => { await start(); lessons.openPanel(); });
 $('#open-learn').addEventListener('click', async () => { await start(); lessons.openPanel(); });
+
+// debugging handle for the browser console
+window.djwoo = { decks, get gig() { return gig; }, get lessons() { return lessons; } };
