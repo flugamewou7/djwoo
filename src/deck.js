@@ -162,8 +162,16 @@ export class Deck {
   /** Jog wheel: bend while playing, scrub while stopped. delta = ticks (+/-). */
   jog(delta) {
     if (!this.buffer) return;
-    if (this.playing) this.pitchBend(delta * 0.01, 100);
-    else this.seek(this.position + delta * 0.01);
+    if (this.playing) {
+      // spin speed builds the bend: a gentle turn nudges, a fast spin pushes harder
+      const now = performance.now();
+      const decay = Math.exp(-(now - (this._jogT || 0)) / 80);
+      this._jogT = now;
+      this._jogVel = (this._jogVel || 0) * decay + delta;
+      this.pitchBend(clamp(this._jogVel * 0.006, -0.2, 0.2), 90);
+    } else {
+      this.seek(this.position + delta * 0.015);
+    }
   }
 
   // ---- mixer parameters, all take 0..1 with 0.5 as neutral where applicable ----

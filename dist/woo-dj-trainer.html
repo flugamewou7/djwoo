@@ -730,8 +730,16 @@ class Deck {
   /** Jog wheel: bend while playing, scrub while stopped. delta = ticks (+/-). */
   jog(delta) {
     if (!this.buffer) return;
-    if (this.playing) this.pitchBend(delta * 0.01, 100);
-    else this.seek(this.position + delta * 0.01);
+    if (this.playing) {
+      // spin speed builds the bend: a gentle turn nudges, a fast spin pushes harder
+      const now = performance.now();
+      const decay = Math.exp(-(now - (this._jogT || 0)) / 80);
+      this._jogT = now;
+      this._jogVel = (this._jogVel || 0) * decay + delta;
+      this.pitchBend(clamp(this._jogVel * 0.006, -0.2, 0.2), 90);
+    } else {
+      this.seek(this.position + delta * 0.015);
+    }
   }
 
   // ---- mixer parameters, all take 0..1 with 0.5 as neutral where applicable ----
@@ -1252,13 +1260,26 @@ class MidiInput {
     if (this.learning) {
       // ignore note-offs while learning so releasing a button doesn't mis-map
       if (msg.type === 'note' && msg.value === 0) return;
+      if (this.learningKind === 'rel') {
+        // jog wheels: touching the platter sends a note first, so skip notes and collect every
+        // rotation CC seen while the user spins (the FLX4 uses different CCs for the top and the edge)
+        if (msg.type !== 'cc') return;
+        if (!this.relKeys) {
+          this.relKeys = new Set();
+          for (const k of Object.keys(this.map)) if (this.map[k] === this.learning) delete this.map[k];
+          this.relTimer = setTimeout(() => this._finishLearn(), 2000);
+        }
+        if (!this.relKeys.has(msg.key)) {
+          this.relKeys.add(msg.key);
+          this.map[msg.key] = this.learning;
+          this.onAction?.({ learning: this.learning, key: msg.key });
+        }
+        return;
+      }
       // one physical control → one action
       for (const k of Object.keys(this.map)) if (this.map[k] === this.learning) delete this.map[k];
       this.map[msg.key] = this.learning;
-      const learned = this.learning;
-      this.learning = null;
-      this._saveMap();
-      this.onAction?.({ learned, key: msg.key });
+      this._finishLearn();
       return;
     }
 
@@ -1266,10 +1287,30 @@ class MidiInput {
     if (action) this.onAction?.({ action, msg });
   }
 
-  learn(action) { this.learning = action; }
-  cancelLearn() { this.learning = null; }
+  learn(action, kind = 'abs') {
+    this.cancelLearn();
+    this.learning = action;
+    this.learningKind = kind;
+  }
 
-  keyFor(action) { return Object.keys(this.map).find((k) => this.map[k] === action) || null; }
+  _finishLearn() {
+    const learned = this.learning;
+    clearTimeout(this.relTimer);
+    this.learning = null;
+    this.relKeys = null;
+    this._saveMap();
+    if (learned) this.onAction?.({ learned });
+  }
+
+  cancelLearn() {
+    clearTimeout(this.relTimer);
+    if (this.relKeys) this._saveMap(); // keep whatever was already captured
+    this.learning = null;
+    this.relKeys = null;
+  }
+
+  keysFor(action) { return Object.keys(this.map).filter((k) => this.map[k] === action); }
+  keyFor(action) { return this.keysFor(action)[0] || null; }
 
   unmap(action) {
     for (const k of Object.keys(this.map)) if (this.map[k] === action) delete this.map[k];
@@ -3033,13 +3074,15 @@ function renderMapRows() {
   const tbody = $('#map-rows');
   tbody.replaceChildren(...ACTIONS.map((a) => {
     const tr = document.createElement('tr');
-    const key = midi.keyFor(a.id);
+    const keys = midi.keysFor(a.id);
+    const key = keys.join(', ');
     const learning = midi.learning === a.id;
-    tr.innerHTML = `<td>${a.label}</td><td class="mono">${learning ? 'move a control…' : key || '—'}</td>
+    const prompt = a.kind === 'rel' ? (keys.length ? `got ${key}, keep spinning…` : 'spin the wheel (top and edge)…') : 'move a control…';
+    tr.innerHTML = `<td>${a.label}</td><td class="mono">${learning ? prompt : key || '—'}</td>
       <td><button class="ghost learn${learning ? ' active' : ''}">${learning ? 'Cancel' : 'Learn'}</button></td>
       <td>${key ? '<button class="ghost unmap" aria-label="Remove mapping">×</button>' : ''}</td>`;
     $('.learn', tr).addEventListener('click', () => {
-      learning ? midi.cancelLearn() : midi.learn(a.id);
+      learning ? midi.cancelLearn() : midi.learn(a.id, a.kind);
       renderMapRows();
     });
     $('.unmap', tr)?.addEventListener('click', () => { midi.unmap(a.id); renderMapRows(); });
@@ -3056,8 +3099,8 @@ function logMidi(msg, device) {
   while (log.children.length > 40) log.lastChild.remove();
 }
 
-function handleMidiAction({ action, msg, learned }) {
-  if (learned) { renderMapRows(); return; }
+function handleMidiAction({ action, msg, learned, learning }) {
+  if (learned || learning) { renderMapRows(); return; }
   const kind = ACTION_KIND[action];
   if (kind === 'button') {
     const pressed = msg.value > 0;
@@ -3065,6 +3108,7 @@ function handleMidiAction({ action, msg, learned }) {
     if (action.endsWith('nudgeDown') || action.endsWith('nudgeUp')) dispatch(action, pressed);
     else if (pressed) dispatch(action, true);
   } else if (kind === 'rel') {
+    if (msg.type !== 'cc') return; // a jog mapped to its touch sensor (old mappings) can't turn anything
     dispatch(action, relativeDelta(msg.value));
   } else {
     const v = msg.hiRes ?? (msg.type === 'pitchbend' ? msg.value / 16383 : msg.value / 127);
@@ -3330,7 +3374,7 @@ $('#start-learn-btn').addEventListener('click', async () => { await start(); les
 $('#open-learn').addEventListener('click', async () => { await start(); lessons.openPanel(); });
 
 // debugging handle for the browser console
-window.djwoo = { decks, get gig() { return gig; }, get lessons() { return lessons; } };
+window.djwoo = { decks, midi, get gig() { return gig; }, get lessons() { return lessons; } };
 
 })();
 })();

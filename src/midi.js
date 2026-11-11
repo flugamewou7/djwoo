@@ -70,13 +70,26 @@ export class MidiInput {
     if (this.learning) {
       // ignore note-offs while learning so releasing a button doesn't mis-map
       if (msg.type === 'note' && msg.value === 0) return;
+      if (this.learningKind === 'rel') {
+        // jog wheels: touching the platter sends a note first, so skip notes and collect every
+        // rotation CC seen while the user spins (the FLX4 uses different CCs for the top and the edge)
+        if (msg.type !== 'cc') return;
+        if (!this.relKeys) {
+          this.relKeys = new Set();
+          for (const k of Object.keys(this.map)) if (this.map[k] === this.learning) delete this.map[k];
+          this.relTimer = setTimeout(() => this._finishLearn(), 2000);
+        }
+        if (!this.relKeys.has(msg.key)) {
+          this.relKeys.add(msg.key);
+          this.map[msg.key] = this.learning;
+          this.onAction?.({ learning: this.learning, key: msg.key });
+        }
+        return;
+      }
       // one physical control → one action
       for (const k of Object.keys(this.map)) if (this.map[k] === this.learning) delete this.map[k];
       this.map[msg.key] = this.learning;
-      const learned = this.learning;
-      this.learning = null;
-      this._saveMap();
-      this.onAction?.({ learned, key: msg.key });
+      this._finishLearn();
       return;
     }
 
@@ -84,10 +97,30 @@ export class MidiInput {
     if (action) this.onAction?.({ action, msg });
   }
 
-  learn(action) { this.learning = action; }
-  cancelLearn() { this.learning = null; }
+  learn(action, kind = 'abs') {
+    this.cancelLearn();
+    this.learning = action;
+    this.learningKind = kind;
+  }
 
-  keyFor(action) { return Object.keys(this.map).find((k) => this.map[k] === action) || null; }
+  _finishLearn() {
+    const learned = this.learning;
+    clearTimeout(this.relTimer);
+    this.learning = null;
+    this.relKeys = null;
+    this._saveMap();
+    if (learned) this.onAction?.({ learned });
+  }
+
+  cancelLearn() {
+    clearTimeout(this.relTimer);
+    if (this.relKeys) this._saveMap(); // keep whatever was already captured
+    this.learning = null;
+    this.relKeys = null;
+  }
+
+  keysFor(action) { return Object.keys(this.map).filter((k) => this.map[k] === action); }
+  keyFor(action) { return this.keysFor(action)[0] || null; }
 
   unmap(action) {
     for (const k of Object.keys(this.map)) if (this.map[k] === action) delete this.map[k];

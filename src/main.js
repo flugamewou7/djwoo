@@ -252,13 +252,15 @@ function renderMapRows() {
   const tbody = $('#map-rows');
   tbody.replaceChildren(...ACTIONS.map((a) => {
     const tr = document.createElement('tr');
-    const key = midi.keyFor(a.id);
+    const keys = midi.keysFor(a.id);
+    const key = keys.join(', ');
     const learning = midi.learning === a.id;
-    tr.innerHTML = `<td>${a.label}</td><td class="mono">${learning ? 'move a control…' : key || '—'}</td>
+    const prompt = a.kind === 'rel' ? (keys.length ? `got ${key}, keep spinning…` : 'spin the wheel (top and edge)…') : 'move a control…';
+    tr.innerHTML = `<td>${a.label}</td><td class="mono">${learning ? prompt : key || '—'}</td>
       <td><button class="ghost learn${learning ? ' active' : ''}">${learning ? 'Cancel' : 'Learn'}</button></td>
       <td>${key ? '<button class="ghost unmap" aria-label="Remove mapping">×</button>' : ''}</td>`;
     $('.learn', tr).addEventListener('click', () => {
-      learning ? midi.cancelLearn() : midi.learn(a.id);
+      learning ? midi.cancelLearn() : midi.learn(a.id, a.kind);
       renderMapRows();
     });
     $('.unmap', tr)?.addEventListener('click', () => { midi.unmap(a.id); renderMapRows(); });
@@ -275,8 +277,8 @@ function logMidi(msg, device) {
   while (log.children.length > 40) log.lastChild.remove();
 }
 
-function handleMidiAction({ action, msg, learned }) {
-  if (learned) { renderMapRows(); return; }
+function handleMidiAction({ action, msg, learned, learning }) {
+  if (learned || learning) { renderMapRows(); return; }
   const kind = ACTION_KIND[action];
   if (kind === 'button') {
     const pressed = msg.value > 0;
@@ -284,6 +286,7 @@ function handleMidiAction({ action, msg, learned }) {
     if (action.endsWith('nudgeDown') || action.endsWith('nudgeUp')) dispatch(action, pressed);
     else if (pressed) dispatch(action, true);
   } else if (kind === 'rel') {
+    if (msg.type !== 'cc') return; // a jog mapped to its touch sensor (old mappings) can't turn anything
     dispatch(action, relativeDelta(msg.value));
   } else {
     const v = msg.hiRes ?? (msg.type === 'pitchbend' ? msg.value / 16383 : msg.value / 127);
@@ -549,4 +552,4 @@ $('#start-learn-btn').addEventListener('click', async () => { await start(); les
 $('#open-learn').addEventListener('click', async () => { await start(); lessons.openPanel(); });
 
 // debugging handle for the browser console
-window.djwoo = { decks, get gig() { return gig; }, get lessons() { return lessons; } };
+window.djwoo = { decks, midi, get gig() { return gig; }, get lessons() { return lessons; } };
