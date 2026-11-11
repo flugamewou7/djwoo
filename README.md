@@ -1,4 +1,4 @@
-# woo — DJ trainer
+# djwoo — DJ trainer
 
 A browser app for learning to mix with a real DJ controller (Pioneer DDJ-FLX4, Numark Party Mix / Platinum FX, or any MIDI controller). It's focused on **progressive house, EDM, house and rap**.
 
